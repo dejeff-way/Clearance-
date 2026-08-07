@@ -402,6 +402,7 @@ async function geocode(q){
 async function fetchRoute(o,d,veh){
   const u=new URL("https://router.hereapi.com/v8/routes");
   u.searchParams.set("transportMode","truck");
+  u.searchParams.set("units","imperial");
   u.searchParams.set("origin",o.lat+","+o.lng);
   u.searchParams.set("destination",d.lat+","+d.lng);
   u.searchParams.set("return","polyline,summary,actions,instructions,typicalDuration");
