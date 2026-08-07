@@ -61,11 +61,23 @@
   .go:disabled{opacity:.45}
 
   /* ---------- map ---------- */
-  #map{flex:1;background:#000;position:relative;z-index:1}
+  #map{flex:1;background:#000;position:relative;z-index:1;overflow:hidden;perspective:1100px}
+  #mapCanvas{position:absolute;top:50%;left:50%;width:150vmax;height:150vmax;
+    transform:translate(-50%,-50%);transition:transform .45s linear;will-change:transform}
+  .credit{position:absolute;right:8px;bottom:3px;z-index:1050;font-size:9px;color:#666;pointer-events:none}
+  .fabs{position:absolute;right:12px;bottom:calc(100px + var(--safe-bot));z-index:1210;
+    display:none;flex-direction:column;gap:10px}
+  .fabs.on{display:flex}
+  .fab{width:50px;height:50px;border-radius:50%;background:var(--panel);border:1px solid var(--line);
+    color:var(--dim);display:flex;align-items:center;justify-content:center}
+  .fab.active{border-color:var(--sign);color:var(--sign)}
+  .me-arrow{width:0;height:0;border-left:11px solid transparent;border-right:11px solid transparent;
+    border-bottom:26px solid var(--sign);filter:drop-shadow(0 1px 3px #000);transform-origin:50% 60%}
   .leaflet-container{background:#000;font-family:var(--body)}
   .leaflet-control-attribution{background:rgba(0,0,0,.72)!important;color:#666!important;font-size:9px}
   .leaflet-control-attribution a{color:#888!important}
   .leaflet-bar a{background:var(--panel)!important;color:var(--ink)!important;border-color:var(--line)!important}
+
   .me-dot{width:16px;height:16px;border-radius:50%;background:var(--sign);
     border:3px solid #000;box-shadow:0 0 0 2px var(--sign)}
 
@@ -178,8 +190,18 @@
   </div>
 
   <div id="map">
+    <div id="mapCanvas"></div>
     <div id="spin"></div>
     <div id="toast"></div>
+    <div class="fabs" id="fabs">
+      <button class="fab active" id="headingFab" title="Heading-up / North-up" aria-label="Toggle heading-up view">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2 5 21l7-4 7 4z"/></svg>
+      </button>
+      <button class="fab active" id="centerFab" title="Recenter" aria-label="Recenter on my position">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="8"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>
+      </button>
+    </div>
+    <div class="credit">© OpenStreetMap © CARTO · Leaflet</div>
 
     <div id="sheet">
       <div class="stats">
@@ -295,9 +317,10 @@ function closeModal(id){$(id).classList.remove("open")}
 document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>closeModal(b.dataset.close)));
 
 /* ============ map ============ */
-const map=L.map("map",{zoomControl:true,attributionControl:true}).setView([39.5,-98.35],4);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
-  maxZoom:19,attribution:'&copy; OpenStreetMap &copy; CARTO'}).addTo(map);
+const map=L.map("mapCanvas",{zoomControl:false,attributionControl:false}).setView([39.5,-98.35],4);
+L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:19}).addTo(map);
+setTimeout(()=>map.invalidateSize(),0);
+const mapCanvasEl=document.getElementById("mapCanvas");
 let routeLayer=null,markerA=null,markerB=null,meMarker=null,accCircle=null;
 
 /* ============ HERE flexible polyline decoder (per HERE reference impl) ============ */
@@ -338,6 +361,11 @@ function fmtFeetOrMiles(m){const ft=m*3.28084;
   return ft<900?Math.round(ft/50)*50+" ft":fmtMiles(m)+" mi"}
 function fmtClock(d){let h=d.getHours(),mm=String(d.getMinutes()).padStart(2,"0");
   const ap=h>=12?"PM":"AM";h=h%12||12;return`${h}:${mm} ${ap}`}
+function bearing(a,b){const f1=a[0]*Math.PI/180,f2=b[0]*Math.PI/180,dl=(b[1]-a[1])*Math.PI/180;
+  const y=Math.sin(dl)*Math.cos(f2);
+  const x=Math.cos(f1)*Math.sin(f2)-Math.sin(f1)*Math.cos(f2)*Math.cos(dl);
+  return(Math.atan2(y,x)*180/Math.PI+360)%360}
+function lerpAngle(a,b,t){const d=((b-a+540)%360)-180;return(a+d*t+360)%360}
 
 /* ============ HERE api ============ */
 async function geocode(q){
@@ -353,7 +381,8 @@ async function fetchRoute(o,d,veh){
   u.searchParams.set("transportMode","truck");
   u.searchParams.set("origin",o.lat+","+o.lng);
   u.searchParams.set("destination",d.lat+","+d.lng);
-  u.searchParams.set("return","polyline,summary,actions,instructions");
+  u.searchParams.set("return","polyline,summary,actions,instructions,typicalDuration");
+  u.searchParams.set("spans","dynamicSpeedInfo,length");
   u.searchParams.set("departureTime",new Date().toISOString());
   u.searchParams.set("vehicle[height]",Math.round(routedInches(veh)*2.54));
   if(veh.wt)u.searchParams.set("vehicle[grossWeight]",Math.round(veh.wt*0.4536));
@@ -368,7 +397,7 @@ async function fetchRoute(o,d,veh){
 let cur=null; // {coords, actions:[{instr,coordIdx}], durationSec, lengthM, notices:[], origin, dest}
 
 function buildRoute(route){
-  let coords=[],actions=[],notices=[],dur=0,len=0;
+  let coords=[],actions=[],notices=[],spans=[],dur=0,typ=0,len=0;
   for(const sec of route.sections){
     const base=coords.length;
     const secCoords=decodeFlexPolyline(sec.polyline);
@@ -376,14 +405,34 @@ function buildRoute(route){
     for(const a of sec.actions||[]){
       actions.push({instr:a.instruction||a.action,coordIdx:base+(a.offset||0)});
     }
+    for(const sp of sec.spans||[]){
+      const info=sp.dynamicSpeedInfo||{};
+      spans.push({start:base+(sp.offset||0),
+        jam:(info.baseSpeed&&info.trafficSpeed!=null)?(info.trafficSpeed/info.baseSpeed):1});
+    }
     for(const n of sec.notices||[])notices.push(n);
-    dur+=sec.summary?.duration||0;len+=sec.summary?.length||0;
+    dur+=sec.summary?.duration||0;typ+=sec.summary?.typicalDuration||sec.summary?.duration||0;len+=sec.summary?.length||0;
   }
-  return{coords,actions,notices,durationSec:dur,lengthM:len}}
+  return{coords,actions,notices,spans,durationSec:dur,typicalSec:typ,lengthM:len}}
+
+function trafficColor(jam){return jam<0.5?"#FF4A3D":jam<0.78?"#FF9500":"#FFD41F"}
+function delayMin(){return cur?Math.max(0,Math.round((cur.durationSec-cur.typicalSec)/60)):0}
+function makeRouteLayer(){
+  const g=L.featureGroup();
+  if(!cur.spans.length){
+    g.addLayer(L.polyline(cur.coords,{color:"#FFD41F",weight:5,opacity:.92}));return g}
+  const sp=cur.spans.slice().sort((a,b)=>a.start-b.start);
+  for(let i=0;i<sp.length;i++){
+    const a=sp[i].start,b=(i+1<sp.length?sp[i+1].start:cur.coords.length-1);
+    if(b<=a)continue;
+    g.addLayer(L.polyline(cur.coords.slice(a,b+1),
+      {color:trafficColor(sp[i].jam),weight:5,opacity:.92}));
+  }
+  return g}
 
 function drawRoute(){
   if(routeLayer)map.removeLayer(routeLayer);
-  routeLayer=L.polyline(cur.coords,{color:"#FFD41F",weight:5,opacity:.92}).addTo(map);
+  routeLayer=makeRouteLayer().addTo(map);
   if(markerA)map.removeLayer(markerA);
   if(markerB)map.removeLayer(markerB);
   markerA=L.circleMarker(cur.coords[0],{radius:6,color:"#000",weight:2,fillColor:"#ECEAE4",fillOpacity:1}).addTo(map);
@@ -395,6 +444,12 @@ function showSheet(){
   $("statTime").textContent=fmtDur(cur.durationSec);
   $("statArrive").textContent=fmtClock(new Date(Date.now()+cur.durationSec*1000));
   const nBox=$("routeNotices");nBox.innerHTML="";
+  const dm=delayMin();
+  if(dm>=3){
+    const t=document.createElement("div");t.className="clear-note";t.style.color="#FF9500";
+    t.textContent="⏱ Traffic is adding about "+dm+" min right now — slow stretches shown in orange/red on the line.";
+    nBox.appendChild(t);
+  }
   const bad=cur.notices.filter(n=>/violat/i.test(n.code||"")||/violat/i.test(n.title||""));
   if(bad.length){
     const d=document.createElement("div");d.className="notice";
@@ -444,6 +499,7 @@ async function planRoute(){
     const d=await geocode(tq);
     const route=await fetchRoute(o,d,v);
     cur=buildRoute(route);cur.origin=o;cur.dest=d;
+    persistRoute();
     drawRoute();showSheet();
   }catch(e){toast(e.message||"Routing failed.")}
   finally{spin(false);$("routeBtn").disabled=false}}
@@ -452,6 +508,36 @@ $("turnsBtn").addEventListener("click",()=>$("turns").classList.toggle("open"));
 
 /* ============ drive mode ============ */
 let watchId=null,wakeLock=null,lastIdx=0,offCount=0,rerouting=false,driving=false;
+let heading=0,lastPos=null,follow=true,headingUp=true,meArrowEl=null;
+
+function applyRot(){
+  const rot=(driving&&headingUp&&follow)?-heading:0;
+  const tilt=(driving&&headingUp&&follow)?52:0;
+  mapCanvasEl.style.transform=
+    `translate(-50%,-50%) rotateX(${tilt}deg) rotate(${rot}deg)`;
+  if(meArrowEl)meArrowEl.style.transform=`rotate(${heading}deg)`;
+  $("headingFab").classList.toggle("active",headingUp);
+  $("centerFab").classList.toggle("active",follow)}
+
+function followView(pos){
+  if(!follow)return;
+  const z=Math.max(map.getZoom(),16);
+  let target=L.latLng(pos);
+  if(headingUp){
+    const pt=map.project(target,z);
+    const r=heading*Math.PI/180,ahead=170;
+    target=map.unproject(pt.add([Math.sin(r)*ahead,-Math.cos(r)*ahead]),z);
+  }
+  map.setView(target,z,{animate:false})}
+
+map.on("dragstart",()=>{if(driving){follow=false;applyRot()}});
+$("centerFab").addEventListener("click",()=>{
+  follow=true;applyRot();
+  if(lastPos)followView(lastPos)});
+$("headingFab").addEventListener("click",()=>{
+  headingUp=!headingUp;applyRot();
+  if(lastPos)followView(lastPos);
+  toast(headingUp?"Driving view — road ahead points up.":"North-up view.")});
 
 $("driveBtn").addEventListener("click",startDrive);
 $("endBtn").addEventListener("click",endDrive);
@@ -463,44 +549,62 @@ async function requestWake(){
 document.addEventListener("visibilitychange",()=>{
   if(driving&&document.visibilityState==="visible"&&!wakeLock)requestWake()});
 
+function driveMeta(){
+  const dm=delayMin();
+  $("driveEta").textContent=fmtDur(cur.durationSec);
+  $("driveMeta").textContent=" · "+fmtMiles(cur.lengthM)+" mi"+(dm>=3?" · +"+dm+"m traffic":"")}
 function startDrive(){
   if(!cur)return;
   if(!navigator.geolocation)return toast("GPS isn't available here. Deploy the app and open it in your phone browser.");
-  driving=true;lastIdx=0;offCount=0;
+  driving=true;lastIdx=0;offCount=0;follow=true;lastPos=null;
   $("sheet").classList.remove("open");
   $("planner").style.display="none";
   $("drive").classList.add("on");
-  $("driveEta").textContent=fmtDur(cur.durationSec);
-  $("driveMeta").textContent=" · "+fmtMiles(cur.lengthM)+" mi";
+  $("fabs").classList.add("on");
+  driveMeta();
   requestWake();
   watchId=navigator.geolocation.watchPosition(onFix,
     e=>toast(e.code===1?"Location permission denied — tracking off.":"GPS signal lost…"),
     {enableHighAccuracy:true,maximumAge:1000,timeout:15000});
-  map.setZoom(15)}
+  map.setZoom(17);applyRot()}
 
 function endDrive(){
   driving=false;
   if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null}
   if(wakeLock){wakeLock.release().catch(()=>{});wakeLock=null}
   $("drive").classList.remove("on");
+  $("fabs").classList.remove("on");
   $("planner").style.display="flex";
+  applyRot();
   if(cur)map.fitBounds(routeLayer.getBounds(),{padding:[36,36]});
-  if(meMarker){map.removeLayer(meMarker);meMarker=null}
+  if(meMarker){map.removeLayer(meMarker);meMarker=null;meArrowEl=null}
   if(accCircle){map.removeLayer(accCircle);accCircle=null}}
 
 function onFix(p){
   const pos=[p.coords.latitude,p.coords.longitude];
   if(!meMarker){
-    meMarker=L.marker(pos,{icon:L.divIcon({className:"",html:'<div class="me-dot"></div>',iconSize:[16,16],iconAnchor:[8,8]})}).addTo(map);
+    meMarker=L.marker(pos,{icon:L.divIcon({className:"",
+      html:'<div class="me-arrow"></div>',iconSize:[22,26],iconAnchor:[11,15]}),
+      interactive:false,zIndexOffset:900}).addTo(map);
+    meArrowEl=meMarker.getElement().querySelector(".me-arrow");
     accCircle=L.circle(pos,{radius:p.coords.accuracy||20,color:"#FFD41F",weight:1,opacity:.3,fillOpacity:.06}).addTo(map);
   }else{meMarker.setLatLng(pos);accCircle.setLatLng(pos);accCircle.setRadius(p.coords.accuracy||20)}
-  map.setView(pos);
+  // heading: use device heading while moving, else derive from last two fixes
+  let hRaw=null;
+  if(typeof p.coords.heading==="number"&&isFinite(p.coords.heading)&&
+     (p.coords.speed==null||p.coords.speed>0.8))hRaw=p.coords.heading;
+  else if(lastPos&&hav(lastPos,pos)>4)hRaw=bearing(lastPos,pos);
+  if(hRaw!=null)heading=lerpAngle(heading,hRaw,0.35);
+  lastPos=pos;
+  applyRot();
+  followView(pos);
   if(!cur||rerouting)return;
   const near=distToRoute(pos,cur.coords,lastIdx);
   if(near.d<80){lastIdx=Math.max(lastIdx,near.idx);offCount=0}
   else offCount++;
   updateNext(pos);
   if(offCount>=3)reroute(pos)}
+
 function updateNext(pos){
   const nxt=cur.actions.find(a=>a.coordIdx>lastIdx&&a.instr);
   if(!nxt){$("nextDist").textContent="";$("nextInstr").textContent="Follow the road to your destination.";return}
@@ -516,11 +620,11 @@ async function reroute(pos){
     const route=await fetchRoute({lat:pos[0],lng:pos[1]},cur.dest,v);
     const dest=cur.dest,origin={lat:pos[0],lng:pos[1],label:"Rerouted"};
     cur=buildRoute(route);cur.origin=origin;cur.dest=dest;
+    persistRoute();
     lastIdx=0;
     if(routeLayer)map.removeLayer(routeLayer);
-    routeLayer=L.polyline(cur.coords,{color:"#FFD41F",weight:5,opacity:.92}).addTo(map);
-    $("driveEta").textContent=fmtDur(cur.durationSec);
-    $("driveMeta").textContent=" · "+fmtMiles(cur.lengthM)+" mi";
+    routeLayer=makeRouteLayer().addTo(map);
+    driveMeta();
     const bad=cur.notices.filter(n=>/violat/i.test(n.code||"")||/violat/i.test(n.title||""));
     if(bad.length)toast("⚠ New route may violate a restriction — check before any low bridge.");
   }catch(e){toast("Reroute failed — retrying on next fix.")}
@@ -590,8 +694,26 @@ $("signBtn").addEventListener("click",()=>{
     box.appendChild(row)}
   openModal("switchModal")});
 
+/* ============ offline resilience ============ */
+function persistRoute(){
+  try{store.setItem("clr.lastRoute",JSON.stringify(cur))}catch(e){/* storage full — skip */}}
+function restoreRoute(){
+  try{
+    const raw=store.getItem("clr.lastRoute");
+    if(!raw)return false;
+    const saved=JSON.parse(raw);
+    if(!saved||!saved.coords||saved.coords.length<2)return false;
+    cur=saved;
+    drawRoute();showSheet();
+    toast("Restored your last route — tap Start driving to resume.");
+    return true;
+  }catch(e){return false}}
+if("serviceWorker"in navigator){
+  try{navigator.serviceWorker.register("sw.js")}catch(e){/* preview sandbox — fine */}}
+
 /* ============ boot ============ */
 renderSign();
+const restored=restoreRoute();
 if(!S.apiKey)setTimeout(()=>{toast("Welcome. Add your free HERE API key in settings to start routing.");},600);
 </script>
 </body>
