@@ -538,6 +538,7 @@ let heading=0,lastPos=null,follow=true,headingUp=true,meArrowEl=null;
 let travelLine=null,fixPrev=null,fixCur=null,animId=null,lastDrawT=0,lastRerouteT=0;
 let dispProg=0,targProg=0,curMps=0,lastFrameT=0;
 let lastEtaT=0,etaRemainSec=null,etaFetchT=0;
+let onRoute=false;
 function progPoint(m){
   const c=cur.cum,n=c.length;
   if(m<=0)return{pt:cur.coords[0],idx:0};
@@ -563,6 +564,11 @@ function travelFrame(){
       lastDrawT=now;
       const pp=progPoint(dispProg);
       travelLine.setLatLngs(cur.coords.slice(0,pp.idx+1).concat([pp.pt]));
+      if(onRoute&&meMarker){
+        meMarker.setLatLng(pp.pt);
+        const j=Math.min(pp.idx+1,cur.coords.length-1);
+        if(j>pp.idx){heading=lerpAngle(heading,bearing(cur.coords[pp.idx],cur.coords[j]),0.25);applyRot()}
+      }
     }
   }
   animId=requestAnimationFrame(travelFrame)}
@@ -615,7 +621,7 @@ function startDrive(){
   if(!cur)return;
   if(!navigator.geolocation)return toast("GPS isn't available here. Deploy the app and open it in your phone browser.");
   driving=true;lastIdx=0;offCount=0;follow=true;lastPos=null;
-  dispProg=0;targProg=0;curMps=0;lastFrameT=0;
+  dispProg=0;targProg=0;curMps=0;lastFrameT=0;onRoute=false;
   lastEtaT=performance.now();etaRemainSec=null;
   $("sheet").classList.remove("open");
   $("planner").style.display="none";
@@ -651,13 +657,15 @@ function onFix(p){
       interactive:false,zIndexOffset:900}).addTo(map);
     meArrowEl=meMarker.getElement().querySelector(".me-arrow");
     accCircle=L.circle(pos,{radius:p.coords.accuracy||20,color:"#FFD41F",weight:1,opacity:.3,fillOpacity:.06}).addTo(map);
-  }else{meMarker.setLatLng(pos);accCircle.setLatLng(pos);accCircle.setRadius(p.coords.accuracy||20)}
+  }else{if(!onRoute)meMarker.setLatLng(pos);accCircle.setLatLng(pos);accCircle.setRadius(p.coords.accuracy||20)}
   // heading: use device heading while moving, else derive from last two fixes
-  let hRaw=null;
-  if(typeof p.coords.heading==="number"&&isFinite(p.coords.heading)&&
-     (p.coords.speed==null||p.coords.speed>0.8))hRaw=p.coords.heading;
-  else if(lastPos&&hav(lastPos,pos)>4)hRaw=bearing(lastPos,pos);
-  if(hRaw!=null)heading=lerpAngle(heading,hRaw,0.35);
+  if(!onRoute){
+    let hRaw=null;
+    if(typeof p.coords.heading==="number"&&isFinite(p.coords.heading)&&
+       (p.coords.speed==null||p.coords.speed>0.8))hRaw=p.coords.heading;
+    else if(lastPos&&hav(lastPos,pos)>4)hRaw=bearing(lastPos,pos);
+    if(hRaw!=null)heading=lerpAngle(heading,hRaw,0.35);
+  }
   lastPos=pos;
   curMps=(p.coords.speed!=null&&isFinite(p.coords.speed)&&p.coords.speed>0)?p.coords.speed:curMps*0.9;
   ensureTravelLine();
@@ -674,12 +682,12 @@ function onFix(p){
   $("mphBig").textContent=mph!=null?mph:"—";
   $("mphBig").style.color=over?"#FF4A3D":"#ECEAE4";
   applyRot();
-  followView(pos);
+  followView((onRoute&&cur&&cur.cum)?progPoint(dispProg).pt:pos);
   if(!cur||rerouting)return;
   const near=distToRoute(pos,cur.coords,lastIdx);
-  if(near.d<80){lastIdx=Math.max(lastIdx,near.idx);offCount=0;
+  if(near.d<80){lastIdx=Math.max(lastIdx,near.idx);offCount=0;onRoute=true;
     if(cur.cum)targProg=cur.cum[lastIdx]}
-  else offCount++;
+  else{offCount++;onRoute=false}
   updateNext(pos);
   updateEta();
   if(performance.now()-lastEtaT>300000&&!rerouting)silentEta(pos);
