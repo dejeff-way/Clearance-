@@ -63,7 +63,7 @@
   /* ---------- map ---------- */
   #map{flex:1;background:#000;position:relative;z-index:1;overflow:hidden;perspective:1100px}
   #mapCanvas{position:absolute;top:50%;left:50%;width:150vmax;height:150vmax;
-    transform:translate(-50%,-50%);transition:transform .45s linear;will-change:transform}
+    transform:translate(-50%,-50%);transition:transform 1.05s linear;will-change:transform}
   .credit{position:absolute;right:8px;bottom:3px;z-index:1050;font-size:9px;color:#666;pointer-events:none}
   .fabs{position:absolute;right:12px;bottom:calc(100px + var(--safe-bot));z-index:1210;
     display:none;flex-direction:column;gap:10px}
@@ -73,6 +73,7 @@
   .fab.active{border-color:var(--sign);color:var(--sign)}
   .me-arrow{width:0;height:0;border-left:11px solid transparent;border-right:11px solid transparent;
     border-bottom:26px solid var(--sign);filter:drop-shadow(0 1px 3px #000);transform-origin:50% 60%}
+  .leaflet-marker-icon{transition:transform 1.05s linear}
   .leaflet-container{background:#000;font-family:var(--body)}
   .leaflet-control-attribution{background:rgba(0,0,0,.72)!important;color:#666!important;font-size:9px}
   .leaflet-control-attribution a{color:#888!important}
@@ -229,6 +230,10 @@
           <span class="stat-num" id="driveEta">—</span>
           <span class="stat-sub" id="driveMeta"></span>
         </div>
+        <div style="text-align:right;margin-right:4px">
+          <div class="stat-num" id="speedNow" style="font-size:26px">—</div>
+          <div class="stat-sub"><span id="speedLimit"></span> mph</div>
+        </div>
         <button class="btn-end" id="endBtn">End</button>
       </div>
     </div>
@@ -317,7 +322,7 @@ function closeModal(id){$(id).classList.remove("open")}
 document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>closeModal(b.dataset.close)));
 
 /* ============ map ============ */
-const map=L.map("mapCanvas",{zoomControl:false,attributionControl:false}).setView([39.5,-98.35],4);
+const map=L.map("mapCanvas",{preferCanvas:true,zoomControl:false,attributionControl:false}).setView([39.5,-98.35],4);
 L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:19}).addTo(map);
 setTimeout(()=>map.invalidateSize(),0);
 const mapCanvasEl=document.getElementById("mapCanvas");
@@ -382,7 +387,7 @@ async function fetchRoute(o,d,veh){
   u.searchParams.set("origin",o.lat+","+o.lng);
   u.searchParams.set("destination",d.lat+","+d.lng);
   u.searchParams.set("return","polyline,summary,actions,instructions,typicalDuration");
-  u.searchParams.set("spans","dynamicSpeedInfo,length");
+  u.searchParams.set("spans","dynamicSpeedInfo,speedLimit,length");
   u.searchParams.set("departureTime",new Date().toISOString());
   u.searchParams.set("vehicle[height]",Math.round(routedInches(veh)*2.54));
   if(veh.wt)u.searchParams.set("vehicle[grossWeight]",Math.round(veh.wt*0.4536));
@@ -408,6 +413,7 @@ function buildRoute(route){
     for(const sp of sec.spans||[]){
       const info=sp.dynamicSpeedInfo||{};
       spans.push({start:base+(sp.offset||0),
+        limit:sp.speedLimit||null,
         jam:(info.baseSpeed&&info.trafficSpeed!=null)?(info.trafficSpeed/info.baseSpeed):1});
     }
     for(const n of sec.notices||[])notices.push(n);
@@ -528,7 +534,8 @@ function followView(pos){
     const r=heading*Math.PI/180,ahead=170;
     target=map.unproject(pt.add([Math.sin(r)*ahead,-Math.cos(r)*ahead]),z);
   }
-  map.setView(target,z,{animate:false})}
+  if(map.getZoom()!==z)map.setZoom(z);
+  map.panTo(target,{animate:true,duration:1.05,easeLinearity:1})}
 
 map.on("dragstart",()=>{if(driving){follow=false;applyRot()}});
 $("centerFab").addEventListener("click",()=>{
@@ -596,6 +603,15 @@ function onFix(p){
   else if(lastPos&&hav(lastPos,pos)>4)hRaw=bearing(lastPos,pos);
   if(hRaw!=null)heading=lerpAngle(heading,hRaw,0.35);
   lastPos=pos;
+  const mph=(p.coords.speed!=null&&isFinite(p.coords.speed))?Math.round(p.coords.speed*2.23694):null;
+  let lim=null;
+  if(cur&&cur.spans.length){
+    const s=cur.spans.filter(x=>x.start<=lastIdx).pop()||cur.spans[0];
+    if(s&&s.limit)lim=Math.round(s.limit*2.23694);
+  }
+  $("speedNow").textContent=mph!=null?mph:"—";
+  $("speedNow").style.color=(mph!=null&&lim&&mph>lim+3)?"#FF4A3D":"#ECEAE4";
+  $("speedLimit").textContent=lim?("limit "+lim):"";
   applyRot();
   followView(pos);
   if(!cur||rerouting)return;
