@@ -74,6 +74,17 @@
   .me-arrow{width:0;height:0;border-left:11px solid transparent;border-right:11px solid transparent;
     border-bottom:26px solid var(--sign);filter:drop-shadow(0 1px 3px #000);transform-origin:50% 60%}
   .leaflet-marker-icon{transition:transform 1.05s linear}
+  .limit-stack{position:absolute;right:10px;top:calc(96px + var(--safe-top));
+    display:none;flex-direction:column;align-items:center;gap:6px}
+  .limit-sign{background:#fff;border-radius:8px;padding:3px;box-shadow:0 2px 10px rgba(0,0,0,.6)}
+  .limit-sign-inner{border:2px solid #000;border-radius:5px;padding:3px 10px 4px;text-align:center}
+  .limit-cap{font-family:var(--disp);font-weight:600;font-size:10px;color:#000;
+    letter-spacing:.06em;line-height:1.1}
+  .limit-num{font-family:var(--disp);font-weight:700;font-size:28px;color:#000;line-height:1}
+  .mph-box{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:5px 12px;text-align:center}
+  .mph-box small{display:block;font-size:10px;color:var(--dim)}
+  #mphBig{font-family:var(--disp);font-weight:700;font-size:26px;line-height:1}
   .leaflet-container{background:#000;font-family:var(--body)}
   .leaflet-control-attribution{background:rgba(0,0,0,.72)!important;color:#666!important;font-size:9px}
   .leaflet-control-attribution a{color:#888!important}
@@ -224,15 +235,18 @@
         <div class="next-dist" id="nextDist">—</div>
         <div class="next-instr" id="nextInstr">Waiting for GPS fix…</div>
       </div>
+      <div class="limit-stack" id="limitStack">
+        <div class="limit-sign"><div class="limit-sign-inner">
+          <div class="limit-cap">SPEED<br>LIMIT</div>
+          <div class="limit-num" id="limitNum">—</div>
+        </div></div>
+        <div class="mph-box"><span id="mphBig">—</span><small>mph</small></div>
+      </div>
       <div class="reroute-flash" id="rerouteFlash">REROUTING</div>
       <div class="drive-bot">
         <div class="drive-eta">
           <span class="stat-num" id="driveEta">—</span>
           <span class="stat-sub" id="driveMeta"></span>
-        </div>
-        <div style="text-align:right;margin-right:4px">
-          <div class="stat-num" id="speedNow" style="font-size:26px">—</div>
-          <div class="stat-sub"><span id="speedLimit"></span> mph</div>
         </div>
         <button class="btn-end" id="endBtn">End</button>
       </div>
@@ -515,6 +529,22 @@ $("turnsBtn").addEventListener("click",()=>$("turns").classList.toggle("open"));
 /* ============ drive mode ============ */
 let watchId=null,wakeLock=null,lastIdx=0,offCount=0,rerouting=false,driving=false;
 let heading=0,lastPos=null,follow=true,headingUp=true,meArrowEl=null;
+let travelLine=null,fixPrev=null,fixCur=null,animId=null,lastDrawT=0,lastRerouteT=0;
+function ensureTravelLine(){
+  if(!travelLine)travelLine=L.polyline([],{color:"#2B2B31",weight:6,opacity:1}).addTo(map);
+  travelLine.bringToFront()}
+function travelFrame(){
+  if(!driving){animId=null;return}
+  const now=performance.now();
+  if(cur&&fixPrev&&fixCur&&travelLine&&now-lastDrawT>66){
+    lastDrawT=now;
+    const span=Math.max(200,Math.min(1500,fixCur.t-fixPrev.t));
+    const k=Math.min(1,(now-fixCur.t)/span);
+    const tip=[fixPrev.pos[0]+(fixCur.pos[0]-fixPrev.pos[0])*k,
+               fixPrev.pos[1]+(fixCur.pos[1]-fixPrev.pos[1])*k];
+    travelLine.setLatLngs(cur.coords.slice(0,lastIdx+1).concat([tip]));
+  }
+  animId=requestAnimationFrame(travelFrame)}
 
 function applyRot(){
   const rot=(driving&&headingUp&&follow)?-heading:0;
@@ -585,7 +615,10 @@ function endDrive(){
   applyRot();
   if(cur)map.fitBounds(routeLayer.getBounds(),{padding:[36,36]});
   if(meMarker){map.removeLayer(meMarker);meMarker=null;meArrowEl=null}
-  if(accCircle){map.removeLayer(accCircle);accCircle=null}}
+  if(accCircle){map.removeLayer(accCircle);accCircle=null}
+  if(travelLine){map.removeLayer(travelLine);travelLine=null}
+  if(animId!=null){cancelAnimationFrame(animId);animId=null}
+  fixPrev=null;fixCur=null}
 
 function onFix(p){
   const pos=[p.coords.latitude,p.coords.longitude];
@@ -603,15 +636,21 @@ function onFix(p){
   else if(lastPos&&hav(lastPos,pos)>4)hRaw=bearing(lastPos,pos);
   if(hRaw!=null)heading=lerpAngle(heading,hRaw,0.35);
   lastPos=pos;
+  fixPrev=fixCur||{pos:pos,t:performance.now()-1000};
+  fixCur={pos:pos,t:performance.now()};
+  ensureTravelLine();
+  if(animId==null)animId=requestAnimationFrame(travelFrame);
   const mph=(p.coords.speed!=null&&isFinite(p.coords.speed))?Math.round(p.coords.speed*2.23694):null;
   let lim=null;
   if(cur&&cur.spans.length){
     const s=cur.spans.filter(x=>x.start<=lastIdx).pop()||cur.spans[0];
     if(s&&s.limit)lim=Math.round(s.limit*2.23694);
   }
-  $("speedNow").textContent=mph!=null?mph:"—";
-  $("speedNow").style.color=(mph!=null&&lim&&mph>lim+3)?"#FF4A3D":"#ECEAE4";
-  $("speedLimit").textContent=lim?("limit "+lim):"";
+  const over=(mph!=null&&lim&&mph>lim+3);
+  $("limitStack").style.display=lim?"flex":"none";
+  if(lim)$("limitNum").textContent=lim;
+  $("mphBig").textContent=mph!=null?mph:"—";
+  $("mphBig").style.color=over?"#FF4A3D":"#ECEAE4";
   applyRot();
   followView(pos);
   if(!cur||rerouting)return;
@@ -619,7 +658,7 @@ function onFix(p){
   if(near.d<80){lastIdx=Math.max(lastIdx,near.idx);offCount=0}
   else offCount++;
   updateNext(pos);
-  if(offCount>=3)reroute(pos)}
+  if(offCount>=3&&performance.now()-lastRerouteT>10000)reroute(pos)}
 
 function updateNext(pos){
   const nxt=cur.actions.find(a=>a.coordIdx>lastIdx&&a.instr);
@@ -629,8 +668,7 @@ function updateNext(pos){
   $("nextInstr").textContent=nxt.instr}
 
 async function reroute(pos){
-  rerouting=true;offCount=0;
-  $("rerouteFlash").style.display="block";
+  rerouting=true;offCount=0;lastRerouteT=performance.now();
   try{
     const v=activeVeh();
     const route=await fetchRoute({lat:pos[0],lng:pos[1]},cur.dest,v);
@@ -640,11 +678,12 @@ async function reroute(pos){
     lastIdx=0;
     if(routeLayer)map.removeLayer(routeLayer);
     routeLayer=makeRouteLayer().addTo(map);
+    if(travelLine){travelLine.setLatLngs([]);travelLine.bringToFront()}
     driveMeta();
     const bad=cur.notices.filter(n=>/violat/i.test(n.code||"")||/violat/i.test(n.title||""));
     if(bad.length)toast("⚠ New route may violate a restriction — check before any low bridge.");
   }catch(e){toast("Reroute failed — retrying on next fix.")}
-  finally{rerouting=false;$("rerouteFlash").style.display="none"}}
+  finally{rerouting=false}}
 
 /* ============ settings & vehicles ============ */
 $("gearBtn").addEventListener("click",()=>{renderVehList();$("apiKeyInput").value=S.apiKey;openModal("settingsModal")});
