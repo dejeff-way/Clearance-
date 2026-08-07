@@ -82,7 +82,7 @@
     letter-spacing:.06em;line-height:1.1}
   .limit-num{font-family:var(--disp);font-weight:700;font-size:28px;color:#000;line-height:1}
   .mph-box{background:var(--panel);border:1px solid var(--line);border-radius:10px;
-    padding:5px 12px;text-align:center}
+    padding:5px 12px;text-align:center;min-width:64px}
   .mph-box small{display:block;font-size:10px;color:var(--dim)}
   #mphBig{font-family:var(--disp);font-weight:700;font-size:26px;line-height:1}
   .leaflet-container{background:#000;font-family:var(--body)}
@@ -536,10 +536,14 @@ $("turnsBtn").addEventListener("click",()=>$("turns").classList.toggle("open"));
 /* ============ drive mode ============ */
 let watchId=null,wakeLock=null,lastIdx=0,offCount=0,rerouting=false,driving=false;
 let heading=0,lastPos=null,follow=true,headingUp=true,meArrowEl=null;
-let travelLine=null,fixPrev=null,fixCur=null,animId=null,lastDrawT=0,lastRerouteT=0;
+let travelLine=null,animId=null,lastDrawT=0,lastRerouteT=0;
 let dispProg=0,targProg=0,curMps=0,lastFrameT=0;
-let lastEtaT=0,etaRemainSec=null,etaFetchT=0;
-let onRoute=false;
+let lastEtaT=0,etaRemainSec=null,etaFetchT=0,onRoute=false;
+let lastFixPos=null,lastFixT=0,curLimit=null;
+
+function ensureTravelLine(){
+  if(!travelLine)travelLine=L.polyline([],{color:"#2B2B31",weight:6,opacity:1}).addTo(map);
+  travelLine.bringToFront()}
 function progPoint(m){
   const c=cur.cum,n=c.length;
   if(m<=0)return{pt:cur.coords[0],idx:0};
@@ -549,9 +553,6 @@ function progPoint(m){
   const t=(m-c[lo])/((c[hi]-c[lo])||1);
   const a=cur.coords[lo],b=cur.coords[hi];
   return{pt:[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],idx:lo}}
-function ensureTravelLine(){
-  if(!travelLine)travelLine=L.polyline([],{color:"#2B2B31",weight:6,opacity:1}).addTo(map);
-  travelLine.bringToFront()}
 function travelFrame(){
   if(!driving){animId=null;return}
   const now=performance.now();
@@ -592,8 +593,7 @@ function followView(pos){
     const r=heading*Math.PI/180,ahead=170;
     target=map.unproject(pt.add([Math.sin(r)*ahead,-Math.cos(r)*ahead]),z);
   }
-  if(map.getZoom()!==z)map.setZoom(z);
-  map.panTo(target,{animate:true,duration:1.05,easeLinearity:1})}
+  map.setView(target,z,{animate:false})}
 
 map.on("dragstart",()=>{if(driving){follow=false;applyRot()}});
 $("centerFab").addEventListener("click",()=>{
@@ -618,16 +618,20 @@ function driveMeta(){
   const dm=delayMin();
   $("driveEta").textContent=fmtDur(cur.durationSec);
   $("driveMeta").textContent=" · "+fmtMiles(cur.lengthM)+" mi"+(dm>=3?" · +"+dm+"m traffic":"")}
+
 function startDrive(){
   if(!cur)return;
   if(!navigator.geolocation)return toast("GPS isn't available here. Deploy the app and open it in your phone browser.");
   driving=true;lastIdx=0;offCount=0;follow=true;lastPos=null;
   dispProg=0;targProg=0;curMps=0;lastFrameT=0;onRoute=false;
+  lastFixPos=null;lastFixT=0;curLimit=null;
   lastEtaT=performance.now();etaRemainSec=null;
   $("sheet").classList.remove("open");
   $("planner").style.display="none";
   $("drive").classList.add("on");
   $("fabs").classList.add("on");
+  ensureTravelLine();
+  if(animId==null)animId=requestAnimationFrame(travelFrame);
   driveMeta();
   requestWake();
   watchId=navigator.geolocation.watchPosition(onFix,
@@ -641,17 +645,29 @@ function endDrive(){
   if(wakeLock){wakeLock.release().catch(()=>{});wakeLock=null}
   $("drive").classList.remove("on");
   $("fabs").classList.remove("on");
+  $("limitStack").style.display="none";
   $("planner").style.display="flex";
   applyRot();
   if(cur)map.fitBounds(routeLayer.getBounds(),{padding:[36,36]});
   if(meMarker){map.removeLayer(meMarker);meMarker=null;meArrowEl=null}
   if(accCircle){map.removeLayer(accCircle);accCircle=null}
   if(travelLine){map.removeLayer(travelLine);travelLine=null}
-  if(animId!=null){cancelAnimationFrame(animId);animId=null}
-  fixPrev=null;fixCur=null}
+  if(animId!=null){cancelAnimationFrame(animId);animId=null}}
 
 function onFix(p){
   const pos=[p.coords.latitude,p.coords.longitude];
+  const now=performance.now();
+  // --- SPEED: trust the phone if it reports it, else compute from fix-to-fix ---
+  let mps=null;
+  if(p.coords.speed!=null&&isFinite(p.coords.speed)&&p.coords.speed>=0){
+    mps=p.coords.speed;
+  }else if(lastFixPos&&lastFixT){
+    const dtSec=(now-lastFixT)/1000;
+    if(dtSec>0.3){const d=hav(lastFixPos,pos);if(d<400)mps=d/dtSec} // ignore GPS jumps
+  }
+  if(mps!=null)curMps=curMps*0.5+mps*0.5; // smooth
+  lastFixPos=pos;lastFixT=now;
+
   if(!meMarker){
     meMarker=L.marker(pos,{icon:L.divIcon({className:"",
       html:'<div class="me-arrow"></div>',iconSize:[22,26],iconAnchor:[11,15]}),
@@ -659,40 +675,41 @@ function onFix(p){
     meArrowEl=meMarker.getElement().querySelector(".me-arrow");
     accCircle=L.circle(pos,{radius:p.coords.accuracy||20,color:"#FFD41F",weight:1,opacity:.3,fillOpacity:.06}).addTo(map);
   }else{if(!onRoute)meMarker.setLatLng(pos);accCircle.setLatLng(pos);accCircle.setRadius(p.coords.accuracy||20)}
-  // heading: use device heading while moving, else derive from last two fixes
+  // heading from device/last-fix only when off-route (on-route heading comes from the road)
   if(!onRoute){
     let hRaw=null;
-    if(typeof p.coords.heading==="number"&&isFinite(p.coords.heading)&&
-       (p.coords.speed==null||p.coords.speed>0.8))hRaw=p.coords.heading;
+    if(typeof p.coords.heading==="number"&&isFinite(p.coords.heading)&&(mps==null||mps>0.8))hRaw=p.coords.heading;
     else if(lastPos&&hav(lastPos,pos)>4)hRaw=bearing(lastPos,pos);
     if(hRaw!=null)heading=lerpAngle(heading,hRaw,0.35);
   }
   lastPos=pos;
-  curMps=(p.coords.speed!=null&&isFinite(p.coords.speed)&&p.coords.speed>0)?p.coords.speed:curMps*0.9;
-  ensureTravelLine();
-  if(animId==null){lastFrameT=0;animId=requestAnimationFrame(travelFrame)}
-  const mph=(p.coords.speed!=null&&isFinite(p.coords.speed))?Math.round(p.coords.speed*2.23694):null;
-  let lim=null;
-  if(cur&&cur.spans.length){
-    const s=cur.spans.filter(x=>x.start<=lastIdx).pop()||cur.spans[0];
-    if(s&&s.limit)lim=Math.round(s.limit*2.23694);
-  }
-  const over=(mph!=null&&lim&&mph>lim+3);
-  $("limitStack").style.display=lim?"flex":"none";
-  if(lim)$("limitNum").textContent=lim;
-  $("mphBig").textContent=mph!=null?mph:"—";
-  $("mphBig").style.color=over?"#FF4A3D":"#ECEAE4";
   applyRot();
   followView((onRoute&&cur&&cur.cum)?progPoint(dispProg).pt:pos);
+
   if(!cur||rerouting)return;
   const near=distToRoute(pos,cur.coords,lastIdx);
   if(near.d<80){lastIdx=Math.max(lastIdx,near.idx);offCount=0;onRoute=true;
     if(cur.cum)targProg=cur.cum[lastIdx]}
   else{offCount++;onRoute=false}
+  updateSpeedSign();
   updateNext(pos);
   updateEta();
-  if(performance.now()-lastEtaT>300000&&!rerouting)silentEta(pos);
-  if(offCount>=3&&performance.now()-lastRerouteT>10000)reroute(pos)}
+  if(offCount>=3&&now-lastRerouteT>10000)reroute(pos);
+  if(now-lastEtaT>300000&&!rerouting)silentEta(pos)}
+
+function updateSpeedSign(){
+  const mph=curMps>0.3?Math.round(curMps*2.23694):(curMps===0&&lastFixT?0:null);
+  let lim=null;
+  if(cur&&cur.spans&&cur.spans.length){
+    const s=cur.spans.filter(x=>x.start<=lastIdx).pop()||cur.spans[0];
+    if(s&&s.limit)lim=Math.round(s.limit*2.23694);
+  }
+  curLimit=lim;
+  const over=(mph!=null&&lim&&mph>lim+3);
+  $("limitStack").style.display=lim?"flex":"none";
+  if(lim)$("limitNum").textContent=lim;
+  $("mphBig").textContent=mph!=null?mph:"—";
+  $("mphBig").style.color=over?"#FF4A3D":"#ECEAE4"}
 
 function turnGlyph(a){
   if(a.act==="uTurn")return"\u2B8C ";
@@ -708,6 +725,7 @@ function updateNext(pos){
   else{d=hav(pos,cur.coords[Math.min(nxt.coordIdx,cur.coords.length-1)])}
   $("nextDist").textContent=turnGlyph(nxt)+fmtFeetOrMiles(d);
   $("nextInstr").textContent=nxt.instr}
+
 function updateEta(){
   if(!cur||!cur.cum)return;
   const total=cur.cum[cur.cum.length-1]||1;
@@ -719,8 +737,9 @@ function updateEta(){
   }
   const dm=delayMin();
   $("driveEta").textContent=fmtDur(sec);
-  $("driveMeta").textContent=" \u00B7 "+fmtMiles(remain)+" mi"+(dm>=3?" \u00B7 +"+dm+"m traffic":"");
+  $("driveMeta").textContent=" · "+fmtMiles(remain)+" mi"+(dm>=3?" · +"+dm+"m traffic":"");
   $("driveArrive").textContent=fmtClock(new Date(Date.now()+sec*1000))}
+
 async function silentEta(pos){
   lastEtaT=performance.now();
   try{
@@ -737,12 +756,11 @@ async function reroute(pos){
     const dest=cur.dest,origin={lat:pos[0],lng:pos[1],label:"Rerouted"};
     cur=buildRoute(route);cur.origin=origin;cur.dest=dest;
     persistRoute();
-    lastIdx=0;
+    lastIdx=0;dispProg=0;targProg=0;
+    lastEtaT=performance.now();etaRemainSec=null;
     if(routeLayer)map.removeLayer(routeLayer);
     routeLayer=makeRouteLayer().addTo(map);
     if(travelLine){travelLine.setLatLngs([]);travelLine.bringToFront()}
-    dispProg=0;targProg=0;
-    lastEtaT=performance.now();etaRemainSec=null;
     driveMeta();
     const bad=cur.notices.filter(n=>/violat/i.test(n.code||"")||/violat/i.test(n.title||""));
     if(bad.length)toast("⚠ New route may violate a restriction — check before any low bridge.");
