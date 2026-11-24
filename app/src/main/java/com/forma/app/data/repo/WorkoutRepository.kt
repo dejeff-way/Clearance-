@@ -45,7 +45,8 @@ class WorkoutRepository(private val db: FormaDatabase, private val time: TimePro
         val started = s.startedAt ?: now
         val all = dao.exerciseLogsFor(sessionId)
         val allDone = all.isNotEmpty() && all.all { it.completed }
-        dao.updateSession(s.copy(
+        val base = if (allDone) closePause(s, now) else s
+        dao.updateSession(base.copy(
             startedAt = started,
             completedAt = if (allDone) (s.completedAt ?: now) else null,
         ))
@@ -87,15 +88,52 @@ class WorkoutRepository(private val db: FormaDatabase, private val time: TimePro
         dao.updateSession(s.copy(notes = notes.ifBlank { null }))
     }
 
-    suspend fun finish(sessionId: Long) {
+    /** Finishes the workout. A running pause is closed first. [minutes] overrides the measured duration. */
+    suspend fun finish(sessionId: Long, minutes: Int? = null) {
         val s = dao.sessionById(sessionId) ?: return
         val now = time.nowMillis()
-        dao.updateSession(s.copy(startedAt = s.startedAt ?: now, completedAt = now))
+        val closed = closePause(s, now)
+        val done = closed.copy(startedAt = closed.startedAt ?: now, completedAt = now)
+        dao.updateSession(if (minutes != null) withDuration(done, minutes) else done)
     }
 
     suspend fun reopen(sessionId: Long) {
         val s = dao.sessionById(sessionId) ?: return
-        dao.updateSession(s.copy(completedAt = null))
+        dao.updateSession(s.copy(completedAt = null, pausedAt = null))
+    }
+
+    /** Starts the timer (no-op if already started). */
+    suspend fun startTimer(sessionId: Long) {
+        val s = dao.sessionById(sessionId) ?: return
+        if (s.startedAt == null) dao.updateSession(s.copy(startedAt = time.nowMillis()))
+    }
+
+    suspend fun pause(sessionId: Long) {
+        val s = dao.sessionById(sessionId) ?: return
+        if (s.completedAt != null || s.pausedAt != null) return
+        val now = time.nowMillis()
+        dao.updateSession(s.copy(startedAt = s.startedAt ?: now, pausedAt = now))
+    }
+
+    suspend fun resume(sessionId: Long) {
+        val s = dao.sessionById(sessionId) ?: return
+        dao.updateSession(closePause(s, time.nowMillis()))
+    }
+
+    /** Corrects the recorded duration of a finished (or running) workout. */
+    suspend fun setDuration(sessionId: Long, minutes: Int) {
+        require(minutes in 1..600) { "Enter between 1 and 600 minutes" }
+        val s = dao.sessionById(sessionId) ?: return
+        dao.updateSession(withDuration(closePause(s, time.nowMillis()), minutes))
+    }
+
+    private fun closePause(s: WorkoutSessionEntity, now: Long) =
+        if (s.pausedAt == null) s else s.copy(pausedMs = s.pausedMs + (now - s.pausedAt).coerceAtLeast(0), pausedAt = null)
+
+    /** Keeps the end time and moves the start so active time equals [minutes] (pauses cleared). */
+    private fun withDuration(s: WorkoutSessionEntity, minutes: Int): WorkoutSessionEntity {
+        val end = s.completedAt ?: time.nowMillis()
+        return s.copy(startedAt = end - minutes * 60_000L, pausedMs = 0, pausedAt = null)
     }
 
     suspend fun deleteSession(sessionId: Long) = db.withTransaction {

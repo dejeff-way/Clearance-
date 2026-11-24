@@ -66,11 +66,11 @@ class EnergyModel(val s: EnergySnapshot) {
         val program = workoutsByDay[d].orEmpty().map { w ->
             val t = s.workoutDefs[w.templateKey]
             val minutes = if (w.startedAt != null && w.completedAt != null)
-                ((w.completedAt - w.startedAt) / 60_000.0).coerceIn(15.0, 120.0)
+                (w.activeMinutes(w.completedAt) ?: 50.0).coerceIn(15.0, 120.0)
             else (t?.durationMinutes ?: 50).toDouble()
             ActivitySession(
                 id = "program-${w.id}", source = SessionSource.PROGRAM, title = "FORMA · ${w.title}",
-                startEpochMs = w.startedAt, endEpochMs = w.completedAt, durationMinutes = minutes,
+                startEpochMs = w.completedAt?.let { it - (minutes * 60_000).toLong() } ?: w.startedAt, endEpochMs = w.completedAt, durationMinutes = minutes,
                 met = t?.met ?: 4.5, recordedByDevice = true,
             )
         }

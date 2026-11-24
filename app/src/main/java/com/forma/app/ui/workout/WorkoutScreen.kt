@@ -223,14 +223,18 @@ class WorkoutViewModel(private val c: AppContainer) : ViewModel() {
         return c.workouts.ensureSession(c.time.today(), s.workout!!.id)
     }
 
-    fun start() = viewModelScope.launch { sessionId() }
+    fun start() = viewModelScope.launch { c.workouts.startTimer(sessionId()) }
     fun toggle(slot: String, done: Boolean) = viewModelScope.launch { c.workouts.setCompleted(sessionId(), slot, done) }
     fun substitute(slot: String, ex: String, remember: Boolean) = viewModelScope.launch { c.workouts.substitute(sessionId(), slot, ex, remember) }
     fun forget(slot: String) = viewModelScope.launch { c.workouts.clearRememberedSubstitution(slot) }
     fun logSet(slot: String, idx: Int, w: Double?, reps: Int?, min: Double?) = viewModelScope.launch { c.workouts.logSet(sessionId(), slot, idx, w, reps, min) }
     fun notes(slot: String, n: String) = viewModelScope.launch { c.workouts.setExerciseNotes(sessionId(), slot, n) }
     fun sessionNotes(n: String) = viewModelScope.launch { c.workouts.setSessionNotes(sessionId(), n) }
-    fun finish() = viewModelScope.launch { c.workouts.finish(sessionId()) }
+    fun finish(minutes: Int? = null) = viewModelScope.launch { c.workouts.finish(sessionId(), minutes) }
+    fun pause() = viewModelScope.launch { c.workouts.pause(sessionId()) }
+    fun resume() = viewModelScope.launch { c.workouts.resume(sessionId()) }
+    fun setDuration(minutes: Int) = viewModelScope.launch { runCatching { c.workouts.setDuration(sessionId(), minutes) } }
+    fun now() = c.time.nowMillis()
     fun reopen() = viewModelScope.launch { c.workouts.reopen(sessionId()) }
     fun discard(id: Long) = viewModelScope.launch { c.workouts.deleteSession(id) }
 }
@@ -244,6 +248,8 @@ fun WorkoutScreen(nav: NavController) {
     var swapFor by remember { mutableStateOf<SlotState?>(null) }
     var confirmDiscard by remember { mutableStateOf(false) }
     var pickToday by remember { mutableStateOf(false) }
+    var finishCheck by remember { mutableStateOf<Int?>(null) }
+    var editDuration by remember { mutableStateOf(false) }
     val isToday = s.viewDate == s.today
     val w = s.workout
     val active = isToday && s.session != null
@@ -308,6 +314,10 @@ fun WorkoutScreen(nav: NavController) {
             if (!isToday && s.session == null && s.viewDate.isAfter(s.today)) {
                 Spacer(Modifier.height(Space.s)); Note("Preview of ${Fmt.relativeDay(s.viewDate, s.today)}'s workout.")
             }
+            if (active && s.session!!.completedAt == null) {
+                Spacer(Modifier.height(Space.m))
+                TimerCard(s.session, vm::now, onPause = { vm.pause() }, onResume = { vm.resume() })
+            }
             SectionHeader("Exercises")
             s.slots.forEachIndexed { i, ss ->
                 ExerciseCard(i + 1, ss, active = active, readOnly = !isToday && s.session != null,
@@ -323,9 +333,15 @@ fun WorkoutScreen(nav: NavController) {
                 FormaField(notes, { notes = it; vm.sessionNotes(it) }, "Session notes", singleLine = false)
                 Spacer(Modifier.height(Space.m))
                 if (sess.completedAt == null) {
-                    PrimaryButton("Finish workout", { vm.finish() }, Modifier.fillMaxWidth().testTag("finish_workout"))
+                    PrimaryButton("Finish workout", {
+                        val minutes = (sess.activeMinutes(vm.now()) ?: 0.0).toInt()
+                        val planned = w.entity.durationMinutes
+                        // Very long times usually mean the phone was put down mid-workout — ask before saving.
+                        if (minutes > maxOf(planned * 2, 120)) finishCheck = minutes else vm.finish()
+                    }, Modifier.fillMaxWidth().testTag("finish_workout"))
                 } else {
                     Note("Workout complete${durationText(sess)?.let { " in $it" } ?: ""}. This counts toward your weekly total.", Tone.ACCENT)
+                    TextAction("Edit duration", { editDuration = true }, modifier = Modifier.testTag("edit_duration"))
                     Spacer(Modifier.height(Space.s))
                     SecondaryButton("Reopen workout", { vm.reopen() }, Modifier.fillMaxWidth())
                 }
@@ -367,6 +383,27 @@ fun WorkoutScreen(nav: NavController) {
             vm.substitute(ss.slot.slotKey, ex, remember); swapFor = null
         }, onForget = { vm.forget(ss.slot.slotKey); swapFor = null })
     }
+    finishCheck?.let { measured ->
+        val planned = w?.entity?.durationMinutes ?: 50
+        var text by remember { mutableStateOf(planned.toString()) }
+        FormaSheet({ finishCheck = null }, "That's $measured minutes", "Longer than expected for a ${planned}-minute workout — maybe the phone was set down mid-session. How long did you actually train?") {
+            FormaField(text, { text = it }, "Workout length", suffix = "min", numeric = true, decimal = false, modifier = Modifier.testTag("finish_minutes"))
+            Spacer(Modifier.height(Space.l))
+            PrimaryButton("Save ${text.toIntOrNull() ?: planned} min", { vm.finish(text.toIntOrNull()?.coerceIn(1, 600) ?: planned); finishCheck = null },
+                Modifier.fillMaxWidth().testTag("finish_save_minutes"), enabled = text.toIntOrNull() in 1..600)
+            Spacer(Modifier.height(Space.s))
+            SecondaryButton("Keep $measured min", { vm.finish(); finishCheck = null }, Modifier.fillMaxWidth())
+        }
+    }
+    if (editDuration && s.session != null) {
+        var text by remember { mutableStateOf(((s.session.activeMinutes(vm.now()) ?: 0.0).toInt()).toString()) }
+        FormaSheet({ editDuration = false }, "Edit duration", "Correct how long this workout took. Paused time is already excluded.") {
+            FormaField(text, { text = it }, "Workout length", suffix = "min", numeric = true, decimal = false, modifier = Modifier.testTag("duration_input"))
+            Spacer(Modifier.height(Space.l))
+            PrimaryButton("Save", { text.toIntOrNull()?.let { vm.setDuration(it) }; editDuration = false },
+                Modifier.fillMaxWidth().testTag("duration_save"), enabled = text.toIntOrNull() in 1..600)
+        }
+    }
     if (pickToday) WorkoutPickerSheet(s.catalog, "Workout for today", { pickToday = false }) { vm.doToday(it); pickToday = false }
     if (confirmDiscard && s.session != null) {
         ConfirmDialog("Discard session?", "All checkmarks, sets and notes for today's ${w?.name} will be deleted.", "Discard",
@@ -375,9 +412,34 @@ fun WorkoutScreen(nav: NavController) {
 }
 
 private fun durationText(s: WorkoutSessionEntity): String? {
-    val a = s.startedAt ?: return null; val b = s.completedAt ?: return null
-    val m = ((b - a) / 60_000).toInt()
+    val end = s.completedAt ?: return null
+    val m = (s.activeMinutes(end) ?: return null).toInt()
     return if (m in 1..600) "$m min" else null
+}
+
+/** Live elapsed time with Pause / Resume. Paused time isn't counted. */
+@Composable
+private fun TimerCard(session: WorkoutSessionEntity, now: () -> Long, onPause: () -> Unit, onResume: () -> Unit) {
+    val c = Forma.colors
+    var tick by remember { mutableStateOf(now()) }
+    val paused = session.pausedAt != null
+    androidx.compose.runtime.LaunchedEffect(session.id, paused) {
+        while (!paused) { tick = now(); kotlinx.coroutines.delay(1000) }
+        tick = now()
+    }
+    val secs = ((session.activeMinutes(tick) ?: 0.0) * 60).toLong()
+    FormaCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(if (paused) "Paused" else if (session.startedAt == null) "Ready" else "Elapsed", style = Forma.type.caption,
+                    color = if (paused) c.warn else c.textSecondary)
+                Text("%d:%02d".format(secs / 60, secs % 60), style = Forma.type.numberLarge, color = if (paused) c.textTertiary else c.text,
+                    modifier = Modifier.testTag("workout_timer"))
+            }
+            if (paused) PrimaryButton("Resume", onResume, Modifier.testTag("resume_workout"))
+            else SecondaryButton("Pause", onPause, Modifier.testTag("pause_workout"))
+        }
+    }
 }
 
 @Composable

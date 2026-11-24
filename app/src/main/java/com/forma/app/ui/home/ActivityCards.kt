@@ -72,7 +72,7 @@ fun ActivityGrid(model: EnergyModel, sync: SyncMetaEntity?, settings: AppSetting
     val goal = model.s.profile.stepGoal.coerceAtLeast(1)
     val steps = e?.steps
     val formaMinutes = model.s.workouts.filter { it.epochDay == today.toEpochDay() && it.completedAt != null && it.startedAt != null }
-        .sumOf { ((it.completedAt!! - it.startedAt!!) / 60_000.0).coerceIn(0.0, 240.0) }.takeIf { it > 0 }
+        .sumOf { (it.activeMinutes(it.completedAt!!) ?: 0.0).coerceIn(0.0, 240.0) }.takeIf { it > 0 }
     val exercise = e?.exerciseMinutes ?: formaMinutes
     val distance = MetricValues.value(Metric.DISTANCE, model, today, settings)
     val rhr = recent(4) { it.restingHr }

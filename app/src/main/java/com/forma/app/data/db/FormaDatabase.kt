@@ -15,7 +15,7 @@ import androidx.room.TypeConverters
         ExerciseEntity::class, WorkoutEntity::class, WorkoutSlotEntity::class, ProgramEntity::class, ProgramDayEntity::class,
         ActiveProgramEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -32,6 +32,13 @@ abstract class FormaDatabase : RoomDatabase() {
     abstract fun library(): WorkoutLibraryDao
 
     companion object {
+        /** v4 → v5: pause/resume for workouts. */
+        val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE workout_sessions ADD COLUMN pausedAt INTEGER")
+                db.execSQL("ALTER TABLE workout_sessions ADD COLUMN pausedMs INTEGER NOT NULL DEFAULT 0")
+            }
+        }
         /** v3 → v4: wearable metrics (heart rate, HRV, sleep stages, distance…), step goal and sync tokens. */
         val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
@@ -95,7 +102,7 @@ abstract class FormaDatabase : RoomDatabase() {
         fun create(context: Context, inMemory: Boolean = false): FormaDatabase {
             val b = if (inMemory) Room.inMemoryDatabaseBuilder(context, FormaDatabase::class.java)
             else Room.databaseBuilder(context, FormaDatabase::class.java, "forma.db")
-            return b.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
+            return b.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
         }
     }
 }

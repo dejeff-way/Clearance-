@@ -213,7 +213,7 @@ class WearableSyncTest {
         sql.execSQL("INSERT INTO profile (id, displayName, sex, ageYears, heightInches, startWeightLb, currentWeightLb, mainGoal, secondaryGoal, skiDateEpochDay, gym, trainingDays, workoutMinutes, baselineActivityFactor, maintenanceActivityFactor, desiredDeficitKcal, minimumBudgetKcal, maxRepaymentPerDay, budgetMode, proteinTargetG, programStartEpochDay, updatedAt) VALUES (1,'','MALE',22,75,260,258,'a','b',20819,'LA Fitness','SUNDAY',55,1.2,1.375,500,2000,200,'DYNAMIC',180,20000,1)")
         sql.version = 3; sql.close()
         val db = androidx.room.Room.databaseBuilder(ctx, FormaDatabase::class.java, "migrate4.db")
-            .addMigrations(FormaDatabase.MIGRATION_1_2, FormaDatabase.MIGRATION_2_3, FormaDatabase.MIGRATION_3_4).build()
+            .addMigrations(FormaDatabase.MIGRATION_1_2, FormaDatabase.MIGRATION_2_3, FormaDatabase.MIGRATION_3_4, FormaDatabase.MIGRATION_4_5).build()
         runBlocking {
             val e = db.energy().get(20000)!!
             assertEquals(9000L, e.steps); assertNull(e.avgHr)

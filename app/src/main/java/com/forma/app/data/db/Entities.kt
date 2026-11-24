@@ -236,7 +236,20 @@ data class WorkoutSessionEntity(
     val startedAt: Long? = null,
     val completedAt: Long? = null,
     val notes: String? = null,
-)
+    // ── v5 ──
+    /** Set while the workout is paused. */
+    val pausedAt: Long? = null,
+    /** Total paused time, excluded from the duration. */
+    @ColumnInfo(defaultValue = "0") val pausedMs: Long = 0,
+) {
+    /** Active (unpaused) minutes, up to [now] while still running. Null if never started. */
+    fun activeMinutes(now: Long): Double? {
+        val start = startedAt ?: return null
+        val end = completedAt ?: now
+        val ongoingPause = if (completedAt == null && pausedAt != null) (now - pausedAt).coerceAtLeast(0) else 0
+        return ((end - start - pausedMs - ongoingPause).coerceAtLeast(0)) / 60_000.0
+    }
+}
 
 @Serializable
 @Entity(
