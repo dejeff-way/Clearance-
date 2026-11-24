@@ -209,14 +209,15 @@ fun HomeScreen(nav: NavController) {
                 }
                 Spacer(Modifier.width(Space.m))
                 Column(Modifier.weight(1f)) {
-                    Text(w.day.title, style = Forma.type.heading, color = c.text)
+                    Text(w.session?.title ?: w.day.title, style = Forma.type.heading, color = c.text)
+                    val wd = w.day.workout?.entity
                     Text(
                         when {
-                            w.day.rest -> "No workout scheduled — rest well."
                             w.done -> "Completed · ${w.totalSlots} exercises"
                             w.session != null -> "${w.completedSlots} of ${w.totalSlots} done"
-                            w.day.optional -> "Optional · ${w.day.focus}"
-                            else -> "${w.day.estimatedMinutes} min · ${w.day.focus}"
+                            wd == null -> if (w.day.rest) "No workout scheduled — rest well." else "Nothing scheduled today."
+                            w.day.optional -> "Optional · ${wd.focus}"
+                            else -> "${wd.durationMinutes} min · ${wd.focus.ifBlank { wd.category }}"
                         },
                         style = Forma.type.bodySmall, color = c.textSecondary,
                     )
@@ -226,7 +227,7 @@ fun HomeScreen(nav: NavController) {
                 }
                 Icon(Icons.Outlined.ChevronRight, null, tint = c.textTertiary)
             }
-            if (!w.day.rest && w.totalSlots > 0) {
+            if ((w.day.workout != null || w.session != null) && w.totalSlots > 0) {
                 Spacer(Modifier.height(Space.m))
                 ThinProgress(w.completedSlots / w.totalSlots.toFloat(), height = 3.dp)
             }
@@ -333,7 +334,7 @@ private fun activityStatus(s: HomeState): String {
     val w = s.workout
     return when {
         w.done -> "Workout done"
-        w.day.rest -> "Rest day · Shabbos"
+        w.day.workout == null -> if (w.day.rest) "Rest day" else "No workout today"
         w.day.optional -> "Optional session"
         w.session != null -> "Workout in progress"
         else -> "Training day"

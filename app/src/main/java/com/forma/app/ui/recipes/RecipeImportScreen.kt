@@ -160,7 +160,7 @@ fun RecipeImportScreen(nav: NavController) {
             if (plan != null && report == null) vm.reset() else nav.popBackStack()
         })
         when {
-            report != null -> ReportView(report!!, onDone = { nav.popBackStack() }, onAnother = { vm.reset() }, context)
+            report != null -> ImportReportView(report!!, onDone = { nav.popBackStack() }, onAnother = { vm.reset() }, context)
             plan != null -> PreviewView(plan!!, busy, vm)
             else -> ChooseView(vm, message, busy, context)
         }
@@ -365,7 +365,8 @@ private fun FixPanel(index: Int, cand: ImportCandidate, vm: RecipeImportViewMode
 }
 
 @Composable
-private fun ReportView(report: ImportReport, onDone: () -> Unit, onAnother: () -> Unit, context: Context) {
+internal fun ImportReportView(report: ImportReport, onDone: () -> Unit, onAnother: () -> Unit, context: Context,
+    successNote: String = "Imported recipes are in their collections, under My recipes, and in Add food.") {
     val c = Forma.colors
     var copied by remember { mutableStateOf(false) }
     Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = Space.gutter).padding(bottom = Space.xxl).testTag("import_report")) {
@@ -380,7 +381,7 @@ private fun ReportView(report: ImportReport, onDone: () -> Unit, onAnother: () -
         }
         if (report.count(ImportOutcome.IMPORTED) + report.count(ImportOutcome.UPDATED) > 0) {
             Spacer(Modifier.height(Space.s))
-            Note("Imported recipes are in their collections, under My recipes, and in Add food.", Tone.ACCENT)
+            Note(successNote, Tone.ACCENT)
         }
         SectionHeader("Details")
         FormaCard {

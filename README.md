@@ -45,6 +45,17 @@ Every recipe is validated and previewed first:
 A report lists what was imported, updated, skipped or failed. Export writes the same format.
 Full specification and a ready-made ChatGPT prompt: [`docs/forma-recipe-v1.md`](docs/forma-recipe-v1.md).
 
+## Workout library, programs and import
+Workouts, programs and the active schedule are stored in the database:
+- **Library:** all workouts, built-in and imported.
+- **Programs:** weekly or multi-week, with week-specific overrides.
+- **Active program:** decides each day's plan.
+
+Imports never change the schedule unless you schedule a workout or activate a program in the preview. Edits to the built-in program go into a copy called "My program".
+Workout → **Import** accepts `forma.workout` v1 with the same validation, preview, approval-gated updates and report as recipes.
+Exercise names match FORMA's library so substitutions and history carry over. Progression can be double, linear or none. Logged weights, reps, sets and duration are kept when programs change.
+Spec and ChatGPT prompt: [`docs/forma-workout-v1.md`](docs/forma-workout-v1.md).
+
 ## How the numbers work
 1. **Expenditure** — one source per day, never summed with overlapping data:
    - Health Connect *Total calories burned* when it is plausibly complete (≥ 80 % of BMR for past days; pro-rated for today). Today is projected to midnight at 1.1 × BMR for the remaining hours. Steps, device-recorded sessions and FORMA workouts are **not** added on top.
@@ -71,14 +82,15 @@ All read-only; FORMA never writes to Health Connect.
 
 History beyond 30 days is not requested (`READ_HEALTH_DATA_HISTORY` is not used). The manifest also includes the privacy-rationale activity Health Connect requires. WorkManager adds its standard `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE` and `ACCESS_NETWORK_STATE` declarations; FORMA makes no network requests.
 
-## Tested (125 automated tests, all passing)
+## Tested (138 automated tests, all passing)
 - **Engine (43):** BMR ≈ 2,265 for the default profile; HC-total, HC-active and estimate modes; partial-day projection; rejecting incomplete totals; steps vs sessions (no double count); overlap de-duplication; budget minimum and warnings; fixed mode; remaining vs deficit; carryover 300 → 200 + 100, minimum-limited repayment, multiple overages, edit/cancel; trend smoothing, 14-day recommendation logic; progression; ingredient scaling.
 - **Data layer (20, Robolectric + Room):** 17 recipes in 4 collections, no desserts, Creami under Snacks; no dairy in meat recipes; raw-fish warnings; portion scaling; milk choice changes nutrition; favourites survive re-seed; log/edit portion/delete updates the summary; calories-only manual entry; workouts raise estimated (not measured) expenditure; carryover affects budget only; weight → BMR; set logging, completion, remembered substitutions; substitutions stay in the same movement pattern; **persistence after closing and reopening the database file**; backup round-trip.
 - **Health Connect sync (9, fake data source):** import; re-sync creates no duplicates; deletions propagate; manual weights untouched; only granted types stored; permission-denied, unavailable and revoked-mid-read states; synced total drives the budget.
 - **UI flows (9, real Compose screens):** all five tabs; manual food entry updates "remaining" immediately; recipe Large portion → log → correct kcal; delete from food log; log weight; start workout, check off, substitute; record carryover; HC unavailable / not-granted / partially-granted screens; theme and targets persist.
 - **Custom recipes (4):** save/scale/edit/delete; total-per-serving mode; built-ins protected; survives re-seed and backup; create in the editor and log it; copy a built-in.
 - **Recipe import (20):** your example file; per-ingredient vs per-serving nutrition; servings; exact error paths; bad values; meat+dairy blocking (coconut milk allowed); category/kosher mapping; duplicate ids; kosher sourcing warnings; unknown fields kept; newer versions; code fences and plain arrays; plain-text recipes; inline fixes; approval-gated updates keeping favourites/photos; built-in protection; 21-recipe bulk import with report; embedded images; export → re-import round trip; **v1 → v2 database migration keeps existing data**; full UI flow.
-- **Screenshots (26):** every main screen in light and dark — see `app/screenshots/`.
+- **Workout import (12):** built-in program seeded and active; your example imports to the library only, with names matched to the library; multi-week program with week overrides, activation and cycling; exact validation paths; timed holds vs reps; approval-gated updates that keep logged history; built-in protection; scheduling copies the built-in program; deletion safeguards; export → re-import round trip; **v2 → v3 database migration**; end-to-end UI flows.
+- **Screenshots (31):** every main screen in light and dark — see `app/screenshots/`.
 
 ## Not done / limitations
 - **No physical device or emulator was available** (the build machine has no hardware virtualisation), so the app ran under Robolectric rather than on a phone. In particular, the real Health Connect permission dialog and real device data could not be exercised; the SDK calls compile against the official API, and the sync logic is tested with a fake data source. Please check the Health Connect flow on your phone first.

@@ -106,7 +106,10 @@ class UiFlowTest {
         rule.onNodeWithTag("tab_workout").performClick()
         waitFor { rule.onAllNodesWithTagExists("workout_title") }
         rule.onNodeWithTag("day_MON").performClick()
-        rule.onNodeWithTag("start_workout").performClick()
+        rule.waitUntil(5000) { rule.onAllNodesWithTagExists("do_today") }
+        rule.onNodeWithTag("do_today").performClick()
+        rule.waitUntil(5000) { rule.onAllNodesWithTagExists("start_workout") }
+        rule.onNodeWithTag("start_workout").performScrollTo().performClick()
         waitFor { rule.onAllNodesWithTagExists("check_MON_1") }
         rule.onNodeWithTag("check_MON_1").performClick()
         waitFor { runBlocking { c.db.workouts().allExerciseLogs() }.any { it.slotKey == "MON_1" && it.completed } }
@@ -132,7 +135,7 @@ class UiFlowTest {
 
     @Test fun `health connect unavailable and permission denied states`() {
         rule.onNodeWithTag("tab_settings").performClick()
-        rule.onNodeWithText("Health Connect").performClick()
+        rule.onNodeWithText("Health Connect", useUnmergedTree = true).performScrollTo().performClick()
         waitFor { rule.onAllNodesWithTagExists("hc_status") && text("hc_status") == "Not available on this device" }
         rule.onNodeWithTag("hc_type_TOTAL_CALORIES").assertIsDisplayed()
 

@@ -148,3 +148,42 @@ interface SyncMetaDao {
     @Query("SELECT * FROM sync_meta WHERE id = 1") suspend fun get(): SyncMetaEntity?
     @Upsert suspend fun upsert(m: SyncMetaEntity)
 }
+
+@Dao
+interface WorkoutLibraryDao {
+    @Query("SELECT * FROM exercises") fun observeExercises(): Flow<List<ExerciseEntity>>
+    @Query("SELECT * FROM exercises") suspend fun exercises(): List<ExerciseEntity>
+    @Upsert suspend fun upsertExercises(e: List<ExerciseEntity>)
+
+    @Query("SELECT * FROM workouts ORDER BY sortOrder, name") fun observeWorkouts(): Flow<List<WorkoutEntity>>
+    @Query("SELECT * FROM workouts") suspend fun workouts(): List<WorkoutEntity>
+    @Query("SELECT * FROM workouts WHERE id = :id") suspend fun workout(id: String): WorkoutEntity?
+    @Query("SELECT * FROM workout_slots ORDER BY workoutId, position") fun observeSlots(): Flow<List<WorkoutSlotEntity>>
+    @Query("SELECT * FROM workout_slots WHERE workoutId = :id ORDER BY position") suspend fun slots(id: String): List<WorkoutSlotEntity>
+    @Upsert suspend fun upsertWorkout(w: WorkoutEntity)
+    @Query("DELETE FROM workout_slots WHERE workoutId = :id") suspend fun clearSlots(id: String)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertSlots(s: List<WorkoutSlotEntity>)
+    @Query("DELETE FROM workouts WHERE id = :id AND builtIn = 0") suspend fun deleteWorkoutRow(id: String)
+    @Query("SELECT MAX(sortOrder) FROM workouts") suspend fun maxWorkoutOrder(): Int?
+
+    @Transaction suspend fun replaceWorkout(w: WorkoutEntity, slots: List<WorkoutSlotEntity>) { upsertWorkout(w); clearSlots(w.id); insertSlots(slots) }
+    @Transaction suspend fun deleteWorkout(id: String) { clearSlots(id); deleteWorkoutRow(id) }
+
+    @Query("SELECT * FROM programs ORDER BY builtIn DESC, name") fun observePrograms(): Flow<List<ProgramEntity>>
+    @Query("SELECT * FROM programs") suspend fun programs(): List<ProgramEntity>
+    @Query("SELECT * FROM programs WHERE id = :id") suspend fun program(id: String): ProgramEntity?
+    @Query("SELECT * FROM program_days") fun observeProgramDays(): Flow<List<ProgramDayEntity>>
+    @Query("SELECT * FROM program_days WHERE programId = :id") suspend fun programDays(id: String): List<ProgramDayEntity>
+    @Upsert suspend fun upsertProgram(p: ProgramEntity)
+    @Upsert suspend fun upsertProgramDays(d: List<ProgramDayEntity>)
+    @Query("DELETE FROM program_days WHERE programId = :id") suspend fun clearProgramDays(id: String)
+    @Query("DELETE FROM program_days WHERE programId = :id AND week = :week AND dayOfWeek = :dow") suspend fun deleteProgramDay(id: String, week: Int, dow: Int)
+    @Query("DELETE FROM programs WHERE id = :id AND builtIn = 0") suspend fun deleteProgramRow(id: String)
+
+    @Transaction suspend fun replaceProgram(p: ProgramEntity, days: List<ProgramDayEntity>) { upsertProgram(p); clearProgramDays(p.id); upsertProgramDays(days) }
+    @Transaction suspend fun deleteProgram(id: String) { clearProgramDays(id); deleteProgramRow(id) }
+
+    @Query("SELECT * FROM active_program WHERE id = 1") fun observeActive(): Flow<ActiveProgramEntity?>
+    @Query("SELECT * FROM active_program WHERE id = 1") suspend fun active(): ActiveProgramEntity?
+    @Upsert suspend fun setActive(a: ActiveProgramEntity)
+}

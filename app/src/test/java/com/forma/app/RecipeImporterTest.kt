@@ -137,7 +137,7 @@ class RecipeImporterTest {
         sql.version = 1
         sql.close()
 
-        val db = androidx.room.Room.databaseBuilder(ctx, FormaDatabase::class.java, "migrate.db").addMigrations(FormaDatabase.MIGRATION_1_2).build()
+        val db = androidx.room.Room.databaseBuilder(ctx, FormaDatabase::class.java, "migrate.db").addMigrations(FormaDatabase.MIGRATION_1_2, FormaDatabase.MIGRATION_2_3).build()
         runBlocking {
             val r = db.recipes().get("custom_x")!!
             assertEquals("USER", r.origin); assertTrue(r.isFavorite); assertEquals(emptyList<String>(), r.tags); assertEquals(1, r.servings)

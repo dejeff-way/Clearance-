@@ -30,5 +30,20 @@ object Progression {
         }
     }
 
+    /** Linear progression: add load every session in which all prescribed sets reached the target reps. */
+    fun adviseLinear(repRange: IntRange, lastSession: List<SetResult>, incrementLb: Double, prescribedSets: Int): ProgressionAdvice {
+        val sets = lastSession.filter { it.reps != null && it.reps > 0 }
+        if (sets.isEmpty()) return ProgressionAdvice(ProgressionAction.NO_DATA, null, "Start light and add ${fmt(incrementLb)} lb each successful session.")
+        val weight = sets.mapNotNull { it.weightLb }.maxOrNull()
+        val success = sets.size >= prescribedSets && sets.all { it.reps!! >= repRange.first }
+        return when {
+            success && weight != null -> ProgressionAdvice(ProgressionAction.INCREASE, weight + incrementLb,
+                "Every set hit ${repRange.first}+ last time. Add ${fmt(incrementLb)} lb → ${fmt(weight + incrementLb)} lb.")
+            success -> ProgressionAdvice(ProgressionAction.INCREASE, null, "Every set hit the target — make it a little harder.")
+            else -> ProgressionAdvice(ProgressionAction.REPEAT, weight,
+                "Not every set reached ${repRange.first} reps. Repeat${weight?.let { " ${fmt(it)} lb" } ?: ""} before adding weight.")
+        }
+    }
+
     private fun fmt(w: Double) = if (w % 1.0 == 0.0) w.toInt().toString() else "%.1f".format(w)
 }

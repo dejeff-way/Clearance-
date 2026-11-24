@@ -70,6 +70,13 @@ class TrendAndProgressionTest {
         assertEquals(ProgressionAction.CONSOLIDATE, Progression.advise(10..12, listOf(SetResult(90.0, 12), SetResult(90.0, 8)), 5.0).action)
     }
 
+    @Test fun `linear progression adds weight only after a fully successful session`() {
+        val ok = Progression.adviseLinear(5..5, List(3) { SetResult(135.0, 5) }, 5.0, 3)
+        assertEquals(ProgressionAction.INCREASE, ok.action); assertEquals(140.0, ok.suggestedWeightLb!!, 0.0)
+        assertEquals(ProgressionAction.REPEAT, Progression.adviseLinear(5..5, listOf(SetResult(135.0, 5), SetResult(135.0, 3)), 5.0, 2).action)
+        assertEquals(ProgressionAction.REPEAT, Progression.adviseLinear(5..5, listOf(SetResult(135.0, 5)), 5.0, 3).action)
+    }
+
     @Test fun `portion scaling is ingredient based`() {
         val chicken = ScalableIngredient(170.0, 230.0, Macros(281.0, 52.7, 0.0, 6.1))
         val oil = ScalableIngredient(1.0, 1.0, Macros(40.0, 0.0, 0.0, 4.5))

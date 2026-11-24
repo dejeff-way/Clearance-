@@ -40,7 +40,6 @@ import com.forma.app.data.db.WeightEntity
 import com.forma.app.data.db.WorkoutSessionEntity
 import com.forma.app.data.prefs.AppSettings
 import com.forma.app.data.repo.EnergyModel
-import com.forma.app.data.seed.WorkoutProgram
 import com.forma.app.di.AppContainer
 import com.forma.app.ui.components.BalanceBars
 import com.forma.app.ui.components.ChartPoint
@@ -108,6 +107,7 @@ fun ProgressScreen(nav: NavController) {
     val vm = formaViewModel { ProgressViewModel(it) }
     val st by vm.state.collectAsStateWithLifecycle()
     val s = st ?: return Box(Modifier.fillMaxSize())
+    val catalog by com.forma.app.ui.LocalContainer.current.catalog.collectAsStateWithLifecycle()
     val c = Forma.colors
     val m = s.model
     val today = m.s.today
@@ -270,12 +270,13 @@ fun ProgressScreen(nav: NavController) {
         SectionHeader("Workout completion · 6 weeks")
         FormaCard {
             val weeks = (5 downTo 0).map { TrendAnalyzer.weekStart(today).minusWeeks(it.toLong()) }
+            val cat = catalog
             val counts = weeks.map { ws ->
-                s.workouts.filter { it.completedAt != null && it.epochDay in ws.toEpochDay()..ws.plusDays(6).toEpochDay() }
-                    .filter { WorkoutProgram.byKey(it.templateKey)?.let { p -> !p.optional && !p.rest } ?: true }
-                    .map { it.epochDay }.distinct().size
+                (0..6).map { ws.plusDays(it.toLong()) }.count { d ->
+                    s.workouts.any { it.completedAt != null && it.epochDay == d.toEpochDay() } && (cat?.planFor(d)?.required ?: true)
+                }
             }
-            val req = WorkoutProgram.requiredPerWeek
+            val req = cat?.requiredInWeekOf(today) ?: 5
             WeekBars(counts, req)
             Spacer(Modifier.height(Space.s))
             Row {

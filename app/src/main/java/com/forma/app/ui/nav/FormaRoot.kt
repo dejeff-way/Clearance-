@@ -66,6 +66,12 @@ import com.forma.app.ui.settings.ProfileEditScreen
 import com.forma.app.ui.settings.SettingsScreen
 import com.forma.app.ui.settings.TargetsEditScreen
 import com.forma.app.ui.theme.Forma
+import com.forma.app.ui.workout.ProgramDetailScreen
+import com.forma.app.ui.workout.ScheduleScreen
+import com.forma.app.ui.workout.WorkoutDetailScreen
+import com.forma.app.ui.workout.WorkoutImportScreen
+import com.forma.app.ui.workout.WorkoutLibraryScreen
+import com.forma.app.ui.workout.WorkoutRoutes
 import com.forma.app.ui.workout.WorkoutScreen
 
 object Routes {
@@ -139,6 +145,11 @@ fun FormaRoot(nav: NavHostController = rememberNavController()) {
                 }
                 composable(Routes.CARRYOVER) { CarryoverScreen(nav) }
                 composable(Routes.IMPORT) { RecipeImportScreen(nav) }
+                composable(WorkoutRoutes.LIBRARY) { WorkoutLibraryScreen(nav) }
+                composable(WorkoutRoutes.SCHEDULE) { ScheduleScreen(nav) }
+                composable(WorkoutRoutes.IMPORT) { WorkoutImportScreen(nav) }
+                composable("workout_detail/{id}") { WorkoutDetailScreen(nav, it.arguments?.getString("id")!!) }
+                composable("program_detail/{id}") { ProgramDetailScreen(nav, it.arguments?.getString("id")!!) }
                 composable(Routes.HEALTH) { HealthConnectScreen(nav) }
                 composable(Routes.PROFILE) { ProfileEditScreen(nav) }
                 composable(Routes.TARGETS) { TargetsEditScreen(nav) }

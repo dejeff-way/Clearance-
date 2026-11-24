@@ -5,7 +5,6 @@ import com.forma.app.data.db.FormaDatabase
 import com.forma.app.data.db.SetLogEntity
 import com.forma.app.data.db.SubstitutionPrefEntity
 import com.forma.app.data.db.WorkoutSessionEntity
-import com.forma.app.data.seed.WorkoutProgram
 import com.forma.app.util.TimeProvider
 import androidx.room.withTransaction
 import java.time.LocalDate
@@ -18,17 +17,18 @@ class WorkoutRepository(private val db: FormaDatabase, private val time: TimePro
     val prefs = dao.observePrefs()
 
     /** Returns the session for [date]+[templateKey], creating it (and one log per slot) if needed. */
-    suspend fun ensureSession(date: LocalDate, templateKey: String): Long = db.withTransaction {
-        val day = WorkoutProgram.byKey(templateKey) ?: error("Unknown workout $templateKey")
-        val existing = dao.session(date.toEpochDay(), templateKey)
+    suspend fun ensureSession(date: LocalDate, workoutId: String): Long = db.withTransaction {
+        val workout = db.library().workout(workoutId) ?: error("Unknown workout $workoutId")
+        val slots = db.library().slots(workoutId)
+        val existing = dao.session(date.toEpochDay(), workoutId)
         val id = existing?.id ?: dao.insertSession(
-            WorkoutSessionEntity(epochDay = date.toEpochDay(), templateKey = templateKey, title = day.title),
+            WorkoutSessionEntity(epochDay = date.toEpochDay(), templateKey = workoutId, title = workout.name),
         )
         val prefs = dao.allPrefs().associate { it.slotKey to it.exerciseKey }
-        day.slots.forEach { slot ->
-            if (dao.exerciseLog(id, slot.key) == null) {
-                dao.insertExerciseLog(ExerciseLogEntity(sessionId = id, slotKey = slot.key,
-                    exerciseKey = prefs[slot.key] ?: slot.exerciseKey))
+        slots.forEach { slot ->
+            if (dao.exerciseLog(id, slot.slotKey) == null) {
+                dao.insertExerciseLog(ExerciseLogEntity(sessionId = id, slotKey = slot.slotKey,
+                    exerciseKey = prefs[slot.slotKey] ?: slot.exerciseKey))
             }
         }
         id
@@ -57,7 +57,8 @@ class WorkoutRepository(private val db: FormaDatabase, private val time: TimePro
             dao.deleteSetsFor(l.id) // sets belonged to the previous exercise
             dao.updateExerciseLog(l.copy(exerciseKey = exerciseKey, updatedAt = time.nowMillis()))
         }
-        val template = WorkoutProgram.days.flatMap { it.slots }.first { it.key == slotKey }.exerciseKey
+        val template = db.library().workouts().firstNotNullOfOrNull { w -> db.library().slots(w.id).firstOrNull { it.slotKey == slotKey } }?.exerciseKey
+            ?: l.exerciseKey
         if (remember) {
             if (exerciseKey == template) dao.deletePref(slotKey) else dao.upsertPref(SubstitutionPrefEntity(slotKey, exerciseKey))
         }

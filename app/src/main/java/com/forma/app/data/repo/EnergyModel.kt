@@ -7,7 +7,6 @@ import com.forma.app.data.db.ExerciseSessionEntity
 import com.forma.app.data.db.ProfileEntity
 import com.forma.app.data.db.WeightEntity
 import com.forma.app.data.db.WorkoutSessionEntity
-import com.forma.app.data.seed.WorkoutProgram
 import com.forma.engine.ActivitySession
 import com.forma.engine.BudgetCalculator
 import com.forma.engine.BudgetMode
@@ -35,6 +34,7 @@ data class EnergySnapshot(
     val carryover: List<CarryoverEntity>,
     val today: LocalDate,
     val elapsedFractionToday: Double,
+    val workoutDefs: Map<String, com.forma.app.data.db.WorkoutEntity> = emptyMap(),
 )
 
 /**
@@ -64,10 +64,10 @@ class EnergyModel(val s: EnergySnapshot) {
         }
         val manual = sessionsByDay[d].orEmpty().map { it.toActivity() }
         val program = workoutsByDay[d].orEmpty().map { w ->
-            val t = WorkoutProgram.byKey(w.templateKey)
+            val t = s.workoutDefs[w.templateKey]
             val minutes = if (w.startedAt != null && w.completedAt != null)
                 ((w.completedAt - w.startedAt) / 60_000.0).coerceIn(15.0, 120.0)
-            else (t?.estimatedMinutes ?: 50).toDouble()
+            else (t?.durationMinutes ?: 50).toDouble()
             ActivitySession(
                 id = "program-${w.id}", source = SessionSource.PROGRAM, title = "FORMA · ${w.title}",
                 startEpochMs = w.startedAt, endEpochMs = w.completedAt, durationMinutes = minutes,

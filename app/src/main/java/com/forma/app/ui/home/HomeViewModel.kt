@@ -9,8 +9,6 @@ import com.forma.app.data.db.SyncMetaEntity
 import com.forma.app.data.db.WorkoutSessionEntity
 import com.forma.app.data.prefs.AppSettings
 import com.forma.app.data.repo.EnergyModel
-import com.forma.app.data.seed.WorkoutDay
-import com.forma.app.data.seed.WorkoutProgram
 import com.forma.app.di.AppContainer
 import com.forma.engine.TrendAnalyzer
 import com.forma.engine.WeightPoint
@@ -27,7 +25,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 data class TodayWorkout(
-    val day: WorkoutDay,
+    val day: com.forma.app.data.workout.PlannedDay,
     val session: WorkoutSessionEntity?,
     val completedSlots: Int,
     val totalSlots: Int,
@@ -62,13 +60,14 @@ class HomeViewModel(private val c: AppContainer) : ViewModel() {
     val state: StateFlow<HomeState?> = combine(
         c.energyModel.filterNotNull(), meals,
         combine(c.workouts.sessions, c.workouts.exerciseLogs) { s, l -> W(s, l) },
-        c.syncMeta, c.settings.settings,
-    ) { model, meals, w, sync, settings ->
+        c.syncMeta, combine(c.settings.settings, c.catalog.filterNotNull()) { a, b -> a to b },
+    ) { model, meals, w, sync, sc ->
+        val (settings, catalog) = sc
         val today = model.s.today
-        val plan = WorkoutProgram.forDay(today.dayOfWeek)
+        val plan = catalog.planFor(today)
         val todays = w.sessions.filter { it.epochDay == today.toEpochDay() }
-        val planned = todays.firstOrNull { it.templateKey == plan.key }
-        val other = todays.firstOrNull { it.templateKey != plan.key }
+        val planned = todays.firstOrNull { it.templateKey == plan.workout?.id } ?: todays.firstOrNull { plan.workout == null }
+        val other = todays.firstOrNull { it != planned }
         val logs = planned?.let { s -> w.logs.filter { it.sessionId == s.id } }.orEmpty()
         val pts = model.s.weights.map { WeightPoint(LocalDate.ofEpochDay(it.epochDay), it.weightLb) }
         val trend = TrendAnalyzer.rolling7(pts)
@@ -76,7 +75,7 @@ class HomeViewModel(private val c: AppContainer) : ViewModel() {
         val weekAgo = trend.lastOrNull { !it.date.isAfter(today.minusDays(7)) }
         HomeState(
             model = model, profile = model.s.profile, meals = meals,
-            workout = TodayWorkout(plan, planned, logs.count { it.completed }, plan.slots.size),
+            workout = TodayWorkout(plan, planned, logs.count { it.completed }, plan.workout?.slots?.size ?: logs.size),
             otherSessionToday = other,
             weightTrend = recent.map { it.average7 },
             trendWeight = trend.lastOrNull()?.average7,

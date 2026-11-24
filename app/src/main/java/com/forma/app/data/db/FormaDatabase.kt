@@ -12,8 +12,10 @@ import androidx.room.TypeConverters
         DailyEnergyEntity::class, ExerciseSessionEntity::class, CarryoverEntity::class, WeightEntity::class,
         MeasurementEntity::class, WorkoutSessionEntity::class, ExerciseLogEntity::class, SetLogEntity::class,
         SubstitutionPrefEntity::class, SyncMetaEntity::class,
+        ExerciseEntity::class, WorkoutEntity::class, WorkoutSlotEntity::class, ProgramEntity::class, ProgramDayEntity::class,
+        ActiveProgramEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -27,8 +29,22 @@ abstract class FormaDatabase : RoomDatabase() {
     abstract fun body(): BodyDao
     abstract fun workouts(): WorkoutDao
     abstract fun syncMeta(): SyncMetaDao
+    abstract fun library(): WorkoutLibraryDao
 
     companion object {
+        /** v2 → v3: workout library, programs and active schedule (seeded from the built-in plan on first launch). */
+        val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `exercises` (`key` TEXT NOT NULL, `name` TEXT NOT NULL, `pattern` TEXT NOT NULL, `kind` TEXT NOT NULL, `instruction` TEXT NOT NULL, `equipment` TEXT, `muscleGroups` TEXT NOT NULL, `tracksWeight` INTEGER NOT NULL, `incrementLb` REAL NOT NULL, `builtIn` INTEGER NOT NULL, PRIMARY KEY(`key`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `workouts` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL, `difficulty` TEXT NOT NULL, `durationMinutes` INTEGER NOT NULL, `focus` TEXT NOT NULL, `notes` TEXT NOT NULL, `goals` TEXT NOT NULL, `tags` TEXT NOT NULL, `met` REAL NOT NULL, `builtIn` INTEGER NOT NULL, `origin` TEXT NOT NULL, `importedAt` INTEGER, `sourceJson` TEXT, `sortOrder` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `workout_slots` (`workoutId` TEXT NOT NULL, `position` INTEGER NOT NULL, `slotKey` TEXT NOT NULL, `exerciseKey` TEXT NOT NULL, `sets` INTEGER NOT NULL, `target` TEXT NOT NULL, `repMin` INTEGER, `repMax` INTEGER, `timed` INTEGER NOT NULL, `restSeconds` INTEGER NOT NULL, `met` REAL NOT NULL, `alternatives` TEXT NOT NULL, `instructionOverride` TEXT, `progression` TEXT NOT NULL, `incrementLb` REAL, PRIMARY KEY(`workoutId`, `position`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_workout_slots_slotKey` ON `workout_slots` (`slotKey`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `programs` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT NOT NULL, `weeks` INTEGER NOT NULL, `builtIn` INTEGER NOT NULL, `origin` TEXT NOT NULL, `importedAt` INTEGER, `sourceJson` TEXT, PRIMARY KEY(`id`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `program_days` (`programId` TEXT NOT NULL, `week` INTEGER NOT NULL, `dayOfWeek` INTEGER NOT NULL, `workoutId` TEXT, `rest` INTEGER NOT NULL, `optional` INTEGER NOT NULL, `label` TEXT, PRIMARY KEY(`programId`, `week`, `dayOfWeek`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `active_program` (`id` INTEGER NOT NULL, `programId` TEXT NOT NULL, `startEpochDay` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))")
+            }
+        }
+
         /** v1 → v2: recipe import fields. Existing data is kept; user-created recipes are marked USER. */
         val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
@@ -47,7 +63,7 @@ abstract class FormaDatabase : RoomDatabase() {
         fun create(context: Context, inMemory: Boolean = false): FormaDatabase {
             val b = if (inMemory) Room.inMemoryDatabaseBuilder(context, FormaDatabase::class.java)
             else Room.databaseBuilder(context, FormaDatabase::class.java, "forma.db")
-            return b.addMigrations(MIGRATION_1_2).build()
+            return b.addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
         }
     }
 }

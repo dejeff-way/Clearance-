@@ -51,6 +51,14 @@ class AppContainer(
     val healthSyncer = HealthSyncer(db, healthSource, time)
     val backup = BackupManager(context, db)
     val recipeImporter = com.forma.app.data.importer.RecipeImporter(context, db, time)
+    val library = com.forma.app.data.workout.WorkoutLibraryRepository(db, time)
+    val workoutImporter = com.forma.app.data.workout.WorkoutImporter(db, time)
+
+    /** "Do this workout today" choice (date, workout id). Doesn't change the schedule. */
+    val workoutOverride = kotlinx.coroutines.flow.MutableStateFlow<Pair<java.time.LocalDate, String>?>(null)
+
+    /** Workout library + active schedule, shared by Home, Workout and Progress. */
+    val catalog: StateFlow<com.forma.app.data.workout.WorkoutCatalog?> = library.catalog.stateIn(appScope, SharingStarted.Eagerly, null)
 
     private val ticker: Flow<Pair<java.time.LocalDate, Double>> = flow {
         while (true) {
@@ -63,7 +71,7 @@ class AppContainer(
     val energyModel: StateFlow<EnergyModel?> = combine(
         listOf(
             profile.profile, body.weights, db.energy().observeAll(), activity.sessions, workouts.sessions,
-            food.dailyTotals, carryover.entries, ticker,
+            food.dailyTotals, carryover.entries, ticker, db.library().observeWorkouts(),
         ),
     ) { arr ->
         @Suppress("UNCHECKED_CAST")
@@ -80,6 +88,7 @@ class AppContainer(
                 carryover = arr[6] as List<com.forma.app.data.db.CarryoverEntity>,
                 today = tick.first,
                 elapsedFractionToday = tick.second,
+                workoutDefs = (arr[8] as List<com.forma.app.data.db.WorkoutEntity>).associateBy { it.id },
             ),
         )
     }.stateIn(appScope, SharingStarted.Eagerly, null)
@@ -89,5 +98,6 @@ class AppContainer(
     suspend fun initialize() {
         profile.ensure()
         recipes.seed()
+        library.seed()
     }
 }
