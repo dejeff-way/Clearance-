@@ -39,6 +39,8 @@ data class BackupFile(
     val exerciseLogs: List<ExerciseLogEntity>,
     val setLogs: List<SetLogEntity>,
     val substitutions: List<SubstitutionPrefEntity>,
+    val customRecipes: List<com.forma.app.data.db.RecipeEntity> = emptyList(),
+    val customIngredients: List<com.forma.app.data.db.IngredientEntity> = emptyList(),
 )
 
 class BackupManager(private val context: Context, private val db: FormaDatabase) {
@@ -58,6 +60,8 @@ class BackupManager(private val context: Context, private val db: FormaDatabase)
         exerciseLogs = db.workouts().allExerciseLogs(),
         setLogs = db.workouts().allSetLogs(),
         substitutions = db.workouts().allPrefs(),
+        customRecipes = db.recipes().all().filter { !it.builtIn },
+        customIngredients = db.recipes().all().filter { !it.builtIn }.flatMap { db.recipes().ingredients(it.id) },
     )
 
     fun encode(b: BackupFile): String = json.encodeToString(BackupFile.serializer(), b)
@@ -97,6 +101,8 @@ class BackupManager(private val context: Context, private val db: FormaDatabase)
         b.exerciseLogs.forEach { db.workouts().insertExerciseLog(it) }
         b.setLogs.forEach { db.workouts().insertSetLog(it) }
         b.substitutions.forEach { db.workouts().upsertPref(it) }
+        db.recipes().all().filter { !it.builtIn }.forEach { db.recipes().deleteCustom(it.id) }
+        b.customRecipes.forEach { r -> db.recipes().replaceRecipe(r.copy(photoUri = null), b.customIngredients.filter { it.recipeId == r.id }) }
     }
 
     /** Daily history as CSV for spreadsheets. */
@@ -122,6 +128,8 @@ class BackupManager(private val context: Context, private val db: FormaDatabase)
             listOf("food_log", "daily_energy", "exercise_sessions", "carryover", "weights", "measurements",
                 "workout_sessions", "exercise_logs", "set_logs", "substitution_prefs", "sync_meta", "profile")
                 .forEach { execSQL("DELETE FROM $it") }
+            execSQL("DELETE FROM recipe_ingredients WHERE recipeId IN (SELECT id FROM recipes WHERE builtIn = 0)")
+            execSQL("DELETE FROM recipes WHERE builtIn = 0")
             execSQL("UPDATE recipes SET isFavorite = 0, photoUri = NULL, selectedMilk = NULL")
         }
     }

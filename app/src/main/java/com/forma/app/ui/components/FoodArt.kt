@@ -72,6 +72,11 @@ object FoodArtSpecs {
         "coffee_protein_creami" to ArtSpec(Vessel.PINT, listOf(El.COFFEE to 1f), center = El.COFFEE),
         "greek_yogurt_snack" to ArtSpec(Vessel.CUP, listOf(El.YOGURT to 1f), center = El.STRAWBERRY, garnish = El.CINNAMON),
         "fruit_and_protein" to ArtSpec(Vessel.DUO, listOf(El.APPLE to 1f, El.SHAKE to 1f)),
+        // Generic art for your own recipes, by collection
+        "custom_BREAKFAST" to ArtSpec(Vessel.PAN, listOf(El.EGG to 3f, El.SPINACH to 1f, El.TOMATO to 0.6f)),
+        "custom_LUNCH" to ArtSpec(Vessel.BOWL, listOf(El.RICE to 1.5f, El.CHICKEN to 1.5f, El.CUCUMBER to 0.8f, El.TOMATO to 0.7f, El.LETTUCE to 0.8f), garnish = El.PARSLEY),
+        "custom_SUPPER" to ArtSpec(Vessel.PLATE, listOf(El.POTATO to 1f, El.GREEN_BEANS to 1f), center = El.CHICKEN, garnish = El.LEMON),
+        "custom_SNACKS" to ArtSpec(Vessel.CUP, listOf(El.YOGURT to 1f), center = El.BERRIES, garnish = El.CINNAMON),
     )
 
     fun forKey(key: String): ArtSpec = specs[key] ?: ArtSpec(Vessel.PLATE, listOf(El.RICE to 1f, El.BROCCOLI to 1f), center = El.CHICKEN)

@@ -27,6 +27,12 @@ Real release signing: create `keystore.properties` in the project root (`storeFi
 - `app/health` — Health Connect: `HealthDataSource` interface, `HealthConnectSource` (official SDK), `HealthSyncer` (idempotent sync), `SyncWorker` (optional hourly background sync).
 - `app/ui` — design system (`theme`, `components`) and screens.
 
+## Your own recipes
+Recipes tab → **+ New**, or open any built-in recipe → **Copy & edit** (built-ins are never changed). Enter nutrition per ingredient
+(FORMA adds it up and scales only the ingredients you mark for large portions) or as a total per serving. Your recipes appear in their
+collection and under **My recipes**, can be edited or deleted, and are included in backups. A warning appears if a Meat recipe has an
+ingredient that looks like dairy (or vice versa).
+
 ## How the numbers work
 1. **Expenditure** — one source per day, never summed with overlapping data:
    - Health Connect *Total calories burned* when it is plausibly complete (≥ 80 % of BMR for past days; pro-rated for today). Today is projected to midnight at 1.1 × BMR for the remaining hours. Steps, device-recorded sessions and FORMA workouts are **not** added on top.
@@ -53,12 +59,13 @@ All read-only; FORMA never writes to Health Connect.
 
 History beyond 30 days is not requested (`READ_HEALTH_DATA_HISTORY` is not used). The manifest also includes the privacy-rationale activity Health Connect requires. WorkManager adds its standard `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE` and `ACCESS_NETWORK_STATE` declarations; FORMA makes no network requests.
 
-## Tested (101 automated tests, all passing)
+## Tested (105 automated tests, all passing)
 - **Engine (43):** BMR ≈ 2,265 for the default profile; HC-total, HC-active and estimate modes; partial-day projection; rejecting incomplete totals; steps vs sessions (no double count); overlap de-duplication; budget minimum and warnings; fixed mode; remaining vs deficit; carryover 300 → 200 + 100, minimum-limited repayment, multiple overages, edit/cancel; trend smoothing, 14-day recommendation logic; progression; ingredient scaling.
 - **Data layer (20, Robolectric + Room):** 17 recipes in 4 collections, no desserts, Creami under Snacks; no dairy in meat recipes; raw-fish warnings; portion scaling; milk choice changes nutrition; favourites survive re-seed; log/edit portion/delete updates the summary; calories-only manual entry; workouts raise estimated (not measured) expenditure; carryover affects budget only; weight → BMR; set logging, completion, remembered substitutions; substitutions stay in the same movement pattern; **persistence after closing and reopening the database file**; backup round-trip.
 - **Health Connect sync (9, fake data source):** import; re-sync creates no duplicates; deletions propagate; manual weights untouched; only granted types stored; permission-denied, unavailable and revoked-mid-read states; synced total drives the budget.
 - **UI flows (9, real Compose screens):** all five tabs; manual food entry updates "remaining" immediately; recipe Large portion → log → correct kcal; delete from food log; log weight; start workout, check off, substitute; record carryover; HC unavailable / not-granted / partially-granted screens; theme and targets persist.
-- **Screenshots (20):** every main screen in light and dark — see `app/screenshots/`.
+- **Custom recipes (4):** save/scale/edit/delete; total-per-serving mode; built-ins protected; survives re-seed and backup; create in the editor and log it; copy a built-in.
+- **Screenshots (22):** every main screen in light and dark — see `app/screenshots/`.
 
 ## Not done / limitations
 - **No physical device or emulator was available** (the build machine has no hardware virtualisation), so the app ran under Robolectric rather than on a phone. In particular, the real Health Connect permission dialog and real device data could not be exercised; the SDK calls compile against the official API, and the sync logic is tested with a fake data source. Please check the Health Connect flow on your phone first.

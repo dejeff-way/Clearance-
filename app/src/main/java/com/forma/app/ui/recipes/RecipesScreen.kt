@@ -84,7 +84,7 @@ class RecipesViewModel(private val c: AppContainer) : ViewModel() {
 /** Library filter: the four collections plus favourites. */
 private enum class Filter(val label: String, val cat: Category?) {
     BREAKFAST("Breakfast", Category.BREAKFAST), LUNCH("Lunch", Category.LUNCH), SUPPER("Supper", Category.SUPPER),
-    SNACKS("Snacks", Category.SNACKS), FAVORITES("Saved", null)
+    SNACKS("Snacks", Category.SNACKS), FAVORITES("Saved", null), MINE("My recipes", null)
 }
 
 @Composable
@@ -95,7 +95,11 @@ fun RecipesScreen(nav: NavController) {
     var query by rememberSaveable { mutableStateOf("") }
     val c = Forma.colors
     val shown = all.filter {
-        (if (filter == Filter.FAVORITES) it.recipe.isFavorite else it.recipe.category == filter.cat!!.name) &&
+        (when (filter) {
+            Filter.FAVORITES -> it.recipe.isFavorite
+            Filter.MINE -> !it.recipe.builtIn
+            else -> it.recipe.category == filter.cat!!.name
+        }) &&
             (query.isBlank() || it.recipe.name.contains(query, true) || it.recipe.summary.contains(query, true))
     }
     LazyColumn(
@@ -104,7 +108,9 @@ fun RecipesScreen(nav: NavController) {
         verticalArrangement = Arrangement.spacedBy(Space.m),
     ) {
         item {
-            ScreenTitle("Recipes", subtitle = "${all.size} kosher recipes")
+            ScreenTitle("Recipes", subtitle = "${all.size} kosher recipes") {
+                com.forma.app.ui.components.TextAction("+ New", { nav.navigate(Routes.newRecipe()) }, modifier = Modifier.testTag("new_recipe"))
+            }
             Spacer(Modifier.height(Space.m))
             FormaField(query, { query = it }, "Search recipes")
             Spacer(Modifier.height(Space.m))
@@ -116,7 +122,11 @@ fun RecipesScreen(nav: NavController) {
             }
         }
         if (shown.isEmpty()) item {
-            Text(if (filter == Filter.FAVORITES) "Tap the heart on any recipe to save it here." else "No recipes match your search.",
+            Text(when {
+                filter == Filter.FAVORITES -> "Tap the heart on any recipe to save it here."
+                filter == Filter.MINE && query.isBlank() -> "Recipes you create appear here. Tap + New, or open any recipe and choose Copy & edit."
+                else -> "No recipes match your search."
+            },
                 style = Forma.type.bodySmall, color = c.textSecondary, modifier = Modifier.padding(vertical = Space.xl))
         }
         items(shown, key = { it.recipe.id }) { d ->

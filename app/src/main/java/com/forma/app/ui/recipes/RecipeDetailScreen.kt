@@ -106,6 +106,7 @@ class RecipeDetailViewModel(private val c: AppContainer, private val id: String)
 
     fun toggleFavorite() = viewModelScope.launch { recipe.value?.let { c.recipes.setFavorite(id, !it.recipe.isFavorite) } }
     fun setMilk(m: MilkOption) = viewModelScope.launch { c.recipes.setMilk(id, m) }
+    fun delete(done: () -> Unit) = viewModelScope.launch { c.recipes.deleteCustom(id); done() }
 
     fun log(meal: Category, portion: Portion, servings: Double, day: LocalDate, done: () -> Unit) = viewModelScope.launch {
         val at = if (day == c.time.today()) c.time.nowMillis() else c.time.startOfDayMillis(day) + 12 * 3_600_000L
@@ -151,6 +152,7 @@ fun RecipeDetailScreen(nav: NavController, id: String) {
     val todayLog by vm.todayLog.collectAsStateWithLifecycle()
     var portion by rememberSaveable { mutableStateOf(Portion.STANDARD) }
     var addSheet by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) vm.setPhoto(context, uri) }
     val f = full ?: return Box(Modifier.fillMaxSize())
@@ -194,7 +196,15 @@ fun RecipeDetailScreen(nav: NavController, id: String) {
                 Text(r.name, style = Forma.type.title, color = c.text)
                 Spacer(Modifier.height(Space.xs))
                 Text(r.summary, style = Forma.type.body, color = c.textSecondary)
-                if (r.photoUri != null) TextAction("Use illustration instead", { vm.setPhoto(context, null) }, color = c.textSecondary)
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    if (r.builtIn) {
+                        TextAction("Copy & edit", { nav.navigate(com.forma.app.ui.nav.Routes.copyRecipe(r.id)) }, modifier = Modifier.testTag("copy_recipe"))
+                    } else {
+                        TextAction("Edit", { nav.navigate(com.forma.app.ui.nav.Routes.editRecipe(r.id)) }, modifier = Modifier.testTag("edit_recipe"))
+                        TextAction("Delete", { confirmDelete = true }, color = c.negative, modifier = Modifier.testTag("delete_recipe"))
+                    }
+                    if (r.photoUri != null) TextAction("Use illustration", { vm.setPhoto(context, null) }, color = c.textSecondary)
+                }
 
                 Spacer(Modifier.height(Space.l))
                 Segmented(Portion.entries, portion, { if (it == Portion.STANDARD) "Standard" else "Large" }, { portion = it },
@@ -240,7 +250,7 @@ fun RecipeDetailScreen(nav: NavController, id: String) {
 
                 SectionHeader("Ingredients")
                 FormaCard {
-                    f.ingredients.forEachIndexed { i, ing ->
+                    f.ingredients.filter { it.unit != com.forma.app.data.repo.TOTAL_UNIT }.forEachIndexed { i, ing ->
                         if (i > 0) Hairline()
                         val amt = if (portion == Portion.LARGE) ing.largeAmount else ing.amount
                         val im = RecipeMath.ingredientMacros(ing, portion, milk)
@@ -285,6 +295,10 @@ fun RecipeDetailScreen(nav: NavController, id: String) {
         }
     }
 
+    if (confirmDelete) {
+        com.forma.app.ui.components.ConfirmDialog("Delete ${r.name}?", "The recipe is removed. Anything you already logged stays in your food log.", "Delete",
+            { confirmDelete = false; vm.delete { nav.popBackStack() } }, { confirmDelete = false }, destructive = true)
+    }
     if (addSheet) {
         AddRecipeSheet(f, portion, vm.today, todayLog, onDismiss = { addSheet = false }) { meal, p, servings, day ->
             vm.log(meal, p, servings, day) { addSheet = false }

@@ -59,6 +59,7 @@ import com.forma.app.ui.home.EnergyBreakdownScreen
 import com.forma.app.ui.home.HomeScreen
 import com.forma.app.ui.progress.ProgressScreen
 import com.forma.app.ui.recipes.RecipeDetailScreen
+import com.forma.app.ui.recipes.RecipeEditorScreen
 import com.forma.app.ui.recipes.RecipesScreen
 import com.forma.app.ui.settings.ProfileEditScreen
 import com.forma.app.ui.settings.SettingsScreen
@@ -77,6 +78,9 @@ object Routes {
     const val PROFILE = "profile_edit"
     const val TARGETS = "targets_edit"
     fun recipe(id: String) = "recipe/$id"
+    fun newRecipe() = "recipe_edit"
+    fun editRecipe(id: String) = "recipe_edit?id=$id"
+    fun copyRecipe(id: String) = "recipe_edit?copy=$id"
     fun log(day: Long) = "log/$day"
     fun addFood(day: Long, meal: String? = null) = "add_food/$day" + (meal?.let { "?meal=$it" } ?: "")
     fun energy(day: Long) = "energy/$day"
@@ -113,6 +117,10 @@ fun FormaRoot(nav: NavHostController = rememberNavController()) {
                 composable(Routes.WORKOUT, enterTransition = { EnterTransition.None }, exitTransition = { ExitTransition.None }) { WorkoutScreen(nav) }
                 composable(Routes.PROGRESS, enterTransition = { EnterTransition.None }, exitTransition = { ExitTransition.None }) { ProgressScreen(nav) }
                 composable(Routes.SETTINGS, enterTransition = { EnterTransition.None }, exitTransition = { ExitTransition.None }) { SettingsScreen(nav) }
+                composable(
+                    "recipe_edit?id={id}&copy={copy}",
+                    listOf(navArgument("id") { nullable = true; defaultValue = null }, navArgument("copy") { nullable = true; defaultValue = null }),
+                ) { RecipeEditorScreen(nav, it.arguments?.getString("id"), it.arguments?.getString("copy")) }
                 composable("recipe/{id}") { RecipeDetailScreen(nav, it.arguments?.getString("id")!!) }
                 composable("log/{day}", listOf(navArgument("day") { type = NavType.LongType })) {
                     FoodLogScreen(nav, it.arguments!!.getLong("day"))

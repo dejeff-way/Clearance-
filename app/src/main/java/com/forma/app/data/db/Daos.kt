@@ -48,6 +48,12 @@ interface RecipeDao {
     @Query("UPDATE recipes SET selectedMilk = :milk WHERE id = :id") suspend fun setMilk(id: String, milk: String?)
     @Query("UPDATE recipes SET photoUri = :uri WHERE id = :id") suspend fun setPhoto(id: String, uri: String?)
 
+    @Query("DELETE FROM recipes WHERE id = :id AND builtIn = 0") suspend fun deleteCustomRecipe(id: String)
+    @Query("SELECT MAX(sortOrder) FROM recipes") suspend fun maxSortOrder(): Int?
+
+    @Transaction
+    suspend fun deleteCustom(id: String) { clearIngredients(id); deleteCustomRecipe(id) }
+
     @Transaction
     suspend fun replaceRecipe(r: RecipeEntity, ingredients: List<IngredientEntity>) {
         upsertRecipe(r); clearIngredients(r.id); insertIngredients(ingredients)

@@ -46,6 +46,9 @@ data class RecipeFull(val recipe: RecipeEntity, val ingredients: List<Ingredient
         RecipeMath.macros(ingredients, portion, servings, milkOverride ?: milk)
 }
 
+/** Unit used for a recipe whose nutrition was entered as a per-serving total rather than per ingredient. */
+const val TOTAL_UNIT = "serving-total"
+
 object RecipeMath {
     fun scalable(i: IngredientEntity, milk: MilkOption?): ScalableIngredient {
         val m = if (i.isMilk) (milk ?: MilkOption.ONE_PERCENT).forMl(i.amount)
@@ -85,6 +88,23 @@ class RecipeRepository(private val db: FormaDatabase) {
             }
         }
     }
+
+    /** Creates or updates a user recipe. Built-in recipes are never overwritten (copy them instead). */
+    suspend fun saveCustom(recipe: RecipeEntity, ingredients: List<IngredientEntity>): String {
+        val existing = db.recipes().get(recipe.id)
+        require(existing == null || !existing.builtIn) { "Built-in recipes can't be edited — make a copy" }
+        require(recipe.name.isNotBlank()) { "Give the recipe a name" }
+        val order = existing?.sortOrder ?: ((db.recipes().maxSortOrder() ?: 0) + 1)
+        val r = recipe.copy(
+            builtIn = false, sortOrder = order, isFavorite = existing?.isFavorite ?: recipe.isFavorite,
+            photoUri = existing?.photoUri ?: recipe.photoUri,
+            usesMilkChoice = ingredients.any { it.isMilk },
+        )
+        db.recipes().replaceRecipe(r, ingredients.mapIndexed { i, g -> g.copy(recipeId = r.id, position = i) })
+        return r.id
+    }
+
+    suspend fun deleteCustom(id: String) = db.recipes().deleteCustom(id)
 
     suspend fun setFavorite(id: String, fav: Boolean) = db.recipes().setFavorite(id, fav)
     suspend fun setMilk(id: String, milk: MilkOption) = db.recipes().setMilk(id, milk.name)
