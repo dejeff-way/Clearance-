@@ -131,7 +131,7 @@ fun ProgressScreen(nav: NavController) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding()
             .padding(horizontal = Space.gutter).padding(bottom = Space.xxl).testTag("progress"),
     ) {
-        ScreenTitle("Progress", subtitle = "Since ${Fmt.fullDate(LocalDate.ofEpochDay(m.s.profile.programStartEpochDay))}")
+        ScreenTitle("Progress", subtitle = "Since ${Fmt.fullDate(listOfNotNull(LocalDate.ofEpochDay(m.s.profile.programStartEpochDay), points.minOfOrNull { it.date }).min())}")
         Spacer(Modifier.height(Space.l))
 
         // ── Weight ──────────────────────────────────────────────

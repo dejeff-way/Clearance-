@@ -16,3 +16,8 @@ inline fun <reified VM : ViewModel> formaViewModel(key: String? = null, crossinl
     val c = LocalContainer.current
     return viewModel(key = key, factory = viewModelFactory { initializer { create(c) } })
 }
+
+/** Navigation must happen on the main thread, even after a suspending database write. */
+suspend fun androidx.navigation.NavController.popOnMain() {
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) { popBackStack() }
+}

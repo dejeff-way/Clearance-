@@ -331,8 +331,11 @@ private fun ExerciseCard(
             }
             if (active) {
                 Spacer(Modifier.height(Space.s))
-                (0 until ss.slot.sets).forEach { idx ->
-                    SetRow(ss, idx, onSet)
+                when {
+                    // Cardio: one duration entry. Holds, stretches and balance work are simply checked off.
+                    ss.exercise.kind == ExerciseKind.CARDIO -> SetRow(ss, 0, onSet)
+                    ss.slot.timed || (!ss.exercise.tracksWeight && ss.slot.repRange == null) -> {}
+                    else -> (0 until ss.slot.sets).forEach { idx -> SetRow(ss, idx, onSet) }
                 }
                 AnimatedVisibility(expanded) {
                     var notes by remember(ss.log?.id) { mutableStateOf(ss.log?.notes ?: "") }
@@ -354,7 +357,7 @@ private fun SetRow(ss: SlotState, idx: Int, onSet: (Int, Double?, Int?, Double?)
     val last = ss.lastSets.firstOrNull { it.setIndex == idx }
     val key = "${ss.log?.id}-${ss.exercise.key}-$idx"
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("Set ${idx + 1}", style = Forma.type.caption, color = c.textTertiary, modifier = Modifier.width(44.dp))
+        Text(if (ss.exercise.kind == ExerciseKind.CARDIO) "Time" else "Set ${idx + 1}", style = Forma.type.caption, color = c.textTertiary, modifier = Modifier.width(44.dp))
         if (ss.slot.timed) {
             var min by remember(key) { mutableStateOf(existing?.durationMin?.let { Fmt.amount(it) } ?: "") }
             FormaField(min, { min = it; onSet(idx, null, null, it.toDoubleOrNull()) }, "Minutes", Modifier.weight(1f).testTag("min_${ss.slot.key}_$idx"),

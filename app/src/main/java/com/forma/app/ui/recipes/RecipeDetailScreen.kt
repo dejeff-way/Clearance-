@@ -254,7 +254,7 @@ fun RecipeDetailScreen(nav: NavController, id: String) {
                                 val sub = listOfNotNull(ing.note, if (ing.optional) "optional · not counted" else null, if (ing.unit == "to taste") "to taste" else null)
                                 if (sub.isNotEmpty()) Text(sub.joinToString(" · "), style = Forma.type.caption, color = c.textTertiary)
                             }
-                            if (!ing.optional && im.kcal >= 1) Text("${im.kcal.roundToInt()}", style = Forma.type.numberSmall, color = c.textTertiary)
+                            if (!ing.optional && im.kcal >= 1) Text("${im.kcal.roundToInt()}", style = Forma.type.numberSmall, color = c.textTertiary, modifier = Modifier.padding(start = Space.m))
                         }
                     }
                 }

@@ -45,6 +45,7 @@ import com.forma.app.data.repo.RecipeFull
 import com.forma.app.data.seed.Category
 import com.forma.app.di.AppContainer
 import com.forma.app.ui.LocalContainer
+import com.forma.app.ui.popOnMain
 import com.forma.app.ui.components.BackBar
 import com.forma.app.ui.components.Chip
 import com.forma.app.ui.components.ConfirmDialog
@@ -316,7 +317,7 @@ fun AddFoodScreen(nav: NavController, epochDay: Long, mealArg: String?) {
                 scope.launch {
                     val at = if (date == today) container.time.nowMillis() else container.time.startOfDayMillis(date) + 12 * 3_600_000L
                     container.food.logManual(name, meal.name, kcal, p, cb, f, epochDay, at)
-                    nav.popBackStack()
+                    nav.popOnMain()
                 }
             }
         }
@@ -327,7 +328,7 @@ fun AddFoodScreen(nav: NavController, epochDay: Long, mealArg: String?) {
                 val at = if (d == today) container.time.nowMillis() else container.time.startOfDayMillis(d) + 12 * 3_600_000L
                 container.food.logRecipe(f.recipe.id, m.name, p, s, d.toEpochDay(), at)
                 picking = null
-                nav.popBackStack()
+                nav.popOnMain()
             }
         }
     }

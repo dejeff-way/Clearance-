@@ -52,6 +52,7 @@ import com.forma.app.data.prefs.ThemeMode
 import com.forma.app.data.prefs.WeightUnit
 import com.forma.app.data.repo.toEnergyProfile
 import com.forma.app.ui.LocalContainer
+import com.forma.app.ui.popOnMain
 import com.forma.app.ui.components.BackBar
 import com.forma.app.ui.components.Chip
 import com.forma.app.ui.components.FormaCard
@@ -305,7 +306,7 @@ fun ProfileEditScreen(nav: NavController) {
                             )
                         }
                         if (kotlin.math.abs(curLb - p.currentWeightLb) > 0.05) runCatching { container.body.logWeight(curLb) }
-                        nav.popBackStack()
+                        nav.popOnMain()
                     }
                 }
             }, Modifier.fillMaxWidth().testTag("save_profile"))
@@ -413,7 +414,7 @@ fun TargetsEditScreen(nav: NavController) {
                                 desiredDeficitKcal = d, proteinTargetG = pr, minimumBudgetKcal = mn, maxRepaymentPerDay = r,
                                 baselineActivityFactor = baseline, maintenanceActivityFactor = maint)
                         }
-                        nav.popBackStack()
+                        nav.popOnMain()
                     }
                 }
             }, Modifier.fillMaxWidth().testTag("save_targets"))

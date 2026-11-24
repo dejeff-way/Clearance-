@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.forma.app.ui.LocalContainer
+import com.forma.app.ui.popOnMain
 import com.forma.app.ui.components.BackBar
 import com.forma.app.ui.components.Chip
 import com.forma.app.ui.components.FormaCard
@@ -198,7 +199,7 @@ fun ActivityAddScreen(nav: NavController, epochDay: Long) {
                             epochDay, title.ifBlank { preset.label }, min, kcal.toDoubleOrNull(), preset.met, onDevice,
                             if (epochDay == container.time.today().toEpochDay()) container.time.nowMillis() - (min * 60_000).toLong() else null, null,
                         )
-                    }.onSuccess { nav.popBackStack() }.onFailure { error = it.message }
+                    }.onSuccess { nav.popOnMain() }.onFailure { error = it.message }
                 }
             }, Modifier.fillMaxWidth().testTag("exercise_save"))
         }
