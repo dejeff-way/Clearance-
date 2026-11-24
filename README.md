@@ -56,6 +56,25 @@ Workout → **Import** accepts `forma.workout` v1 with the same validation, prev
 Exercise names match FORMA's library so substitutions and history carry over. Progression can be double, linear or none. Logged weights, reps, sets and duration are kept when programs change.
 Spec and ChatGPT prompt: [`docs/forma-workout-v1.md`](docs/forma-workout-v1.md).
 
+## Wearable integration (Health Connect)
+FORMA reads every type below that you allow. A Fitbit band, Pixel Watch, Samsung watch or Google Fit all work, as long as the app writes to Health Connect:
+- Steps, distance and floors
+- Total, active and basal calories
+- Exercise sessions, including per-workout heart rate, calories and distance
+- Heart rate (daily average and range) and resting heart rate
+- HRV (RMSSD), SpO₂ and respiratory rate
+- Sleep, with stages
+- Weight and body fat
+
+Not every device shares every type. The **Data check** on the Health Connect screen shows, for each type, whether it's allowed, how many of the last 30 days have data, the latest reading, and which app supplied it.
+
+- **Sync:** runs when the app starts, whenever it returns to the foreground, when the dashboard opens (if the last sync is more than 2 minutes old), on manual refresh, and hourly in the background if that permission is granted. After the first 30-day import, Health Connect **change tokens** make syncs incremental. Today and yesterday are always re-read; updated records replace older ones and deletions are applied. An expired token or a permission change triggers a full re-sync.
+- **No fake zeros:** a temporarily missing value keeps the last valid reading, a revoked permission clears that type, and unavailable metrics show "—" with the reason.
+- **Calories:** FORMA keeps five separate values: baseline, activity, total expenditure, food and deficit. Total calories, when available, are never topped up with active calories. Measured basal energy replaces the formula when present. An optional conservative adjustment (−5/−10/−15%) trims only the activity part. In dynamic mode, activity can raise the food budget by at most a set amount (default +500 kcal), while the actual deficit always uses the full estimate.
+- **Dashboard:** steps (vs a configurable goal, default 10,000), calories burned, exercise minutes, distance, heart rate, resting HR, sleep, and HRV/floors when available. Tap any tile for its 7/30/90-day history with weekly averages and a 30-day trend.
+- **Workouts:** watch workouts appear in history with type, duration, average and max heart rate, calories, distance and source. One that overlaps a FORMA workout is merged with it, not duplicated. Imports never change your schedule.
+- **Privacy:** read-only; nothing leaves the phone and no health values are logged.
+
 ## How the numbers work
 1. **Expenditure** — one source per day, never summed with overlapping data:
    - Health Connect *Total calories burned* when it is plausibly complete (≥ 80 % of BMR for past days; pro-rated for today). Today is projected to midnight at 1.1 × BMR for the remaining hours. Steps, device-recorded sessions and FORMA workouts are **not** added on top.
@@ -82,7 +101,7 @@ All read-only; FORMA never writes to Health Connect.
 
 History beyond 30 days is not requested (`READ_HEALTH_DATA_HISTORY` is not used). The manifest also includes the privacy-rationale activity Health Connect requires. WorkManager adds its standard `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE` and `ACCESS_NETWORK_STATE` declarations; FORMA makes no network requests.
 
-## Tested (138 automated tests, all passing)
+## Tested (157 automated tests, all passing)
 - **Engine (43):** BMR ≈ 2,265 for the default profile; HC-total, HC-active and estimate modes; partial-day projection; rejecting incomplete totals; steps vs sessions (no double count); overlap de-duplication; budget minimum and warnings; fixed mode; remaining vs deficit; carryover 300 → 200 + 100, minimum-limited repayment, multiple overages, edit/cancel; trend smoothing, 14-day recommendation logic; progression; ingredient scaling.
 - **Data layer (20, Robolectric + Room):** 17 recipes in 4 collections, no desserts, Creami under Snacks; no dairy in meat recipes; raw-fish warnings; portion scaling; milk choice changes nutrition; favourites survive re-seed; log/edit portion/delete updates the summary; calories-only manual entry; workouts raise estimated (not measured) expenditure; carryover affects budget only; weight → BMR; set logging, completion, remembered substitutions; substitutions stay in the same movement pattern; **persistence after closing and reopening the database file**; backup round-trip.
 - **Health Connect sync (9, fake data source):** import; re-sync creates no duplicates; deletions propagate; manual weights untouched; only granted types stored; permission-denied, unavailable and revoked-mid-read states; synced total drives the budget.
@@ -90,7 +109,8 @@ History beyond 30 days is not requested (`READ_HEALTH_DATA_HISTORY` is not used)
 - **Custom recipes (4):** save/scale/edit/delete; total-per-serving mode; built-ins protected; survives re-seed and backup; create in the editor and log it; copy a built-in.
 - **Recipe import (20):** your example file; per-ingredient vs per-serving nutrition; servings; exact error paths; bad values; meat+dairy blocking (coconut milk allowed); category/kosher mapping; duplicate ids; kosher sourcing warnings; unknown fields kept; newer versions; code fences and plain arrays; plain-text recipes; inline fixes; approval-gated updates keeping favourites/photos; built-in protection; 21-recipe bulk import with report; embedded images; export → re-import round trip; **v1 → v2 database migration keeps existing data**; full UI flow.
 - **Workout import (12):** built-in program seeded and active; your example imports to the library only, with names matched to the library; multi-week program with week overrides, activation and cycling; exact validation paths; timed holds vs reps; approval-gated updates that keep logged history; built-in protection; scheduling copies the built-in program; deletion safeguards; export → re-import round trip; **v2 → v3 database migration**; end-to-end UI flows.
-- **Screenshots (31):** every main screen in light and dark — see `app/screenshots/`.
+- **Wearable integration (19):** every supported type imported, including sleep stages, per-workout heart rate/calories/distance and sources; unavailable metrics stay null; incremental change-token sync (narrow window, old-day uploads, expired tokens, permission changes); last-good-value retention vs deletions; updates without duplicates; no double-counting in the calorie engine; adjustment and budget cap; overlapping watch/FORMA workouts counted once; persistence across restarts; v3 → v4 migration; dashboard tiles before and after sync, live updates, history navigation and the data check.
+- **Screenshots (35):** every main screen in light and dark — see `app/screenshots/`.
 
 ## Not done / limitations
 - **No physical device or emulator was available** (the build machine has no hardware virtualisation), so the app ran under Robolectric rather than on a phone. In particular, the real Health Connect permission dialog and real device data could not be exercised; the SDK calls compile against the official API, and the sync logic is tested with a fake data source. Please check the Health Connect flow on your phone first.

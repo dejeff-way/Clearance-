@@ -116,8 +116,18 @@ data class WorkoutState(
     val programName: String,
     val programWeek: Int,
     val programWeeks: Int,
-    val history: List<Pair<WorkoutSessionEntity, Int>>,
+    val history: List<HistoryItem>,
     val catalog: WorkoutCatalog,
+)
+
+/** A history row: a FORMA workout, a watch workout, or both merged when they overlap. */
+data class HistoryItem(
+    val title: String,
+    val date: LocalDate,
+    val endedAt: Long,
+    val forma: WorkoutSessionEntity?,
+    val watch: com.forma.app.data.db.ExerciseSessionEntity?,
+    val setsLogged: Int,
 )
 
 private data class Logs(val sessions: List<WorkoutSessionEntity>, val logs: List<ExerciseLogEntity>, val sets: List<SetLogEntity>, val prefs: Map<String, String>)
@@ -129,7 +139,7 @@ class WorkoutViewModel(private val c: AppContainer) : ViewModel() {
         Logs(s, l, st, p.associate { it.slotKey to it.exerciseKey })
     }
 
-    val state = combine(viewDate, c.workoutOverride, c.catalog.filterNotNull(), logs) { date, override, cat, lg ->
+    val state = combine(viewDate, c.workoutOverride, c.catalog.filterNotNull(), logs, c.activity.sessions) { date, override, cat, lg, external ->
         val today = c.time.today()
         val plan = cat.planFor(date)
         val todayOverride = override?.takeIf { it.first == today }?.second?.let { cat.workoutsById[it] }
@@ -178,9 +188,18 @@ class WorkoutViewModel(private val c: AppContainer) : ViewModel() {
             }
             WeekDayState(d, p, mark)
         }
-        val history = lg.sessions.filter { it.completedAt != null }.sortedByDescending { it.completedAt }.take(8).map { s ->
-            s to lg.logs.filter { it.sessionId == s.id }.sumOf { l -> lg.sets.count { it.exerciseLogId == l.id && (it.reps != null || it.durationMin != null) } }
+        val watch = external.filter { it.source == "HEALTH_CONNECT" }
+        val formaDone = lg.sessions.filter { it.completedAt != null }
+        val formaItems = formaDone.map { s ->
+            val overlap = watch.firstOrNull { w -> w.epochDay == s.epochDay && com.forma.app.ui.metrics.MetricValues.overlaps(s.startedAt, s.completedAt, w.startTime, w.endTime) }
+            HistoryItem(s.title, LocalDate.ofEpochDay(s.epochDay), s.completedAt!!, s, overlap,
+                lg.logs.filter { it.sessionId == s.id }.sumOf { l -> lg.sets.count { it.exerciseLogId == l.id && (it.reps != null || it.durationMin != null) } })
         }
+        val merged = formaItems.mapNotNull { it.watch?.id }.toSet()
+        val watchItems = watch.filter { it.id !in merged }.map { w ->
+            HistoryItem(w.title, LocalDate.ofEpochDay(w.epochDay), w.endTime ?: w.createdAt, null, w, 0)
+        }
+        val history = (formaItems + watchItems).sortedByDescending { it.endedAt }.take(10)
         val prog = cat.activeProgram
         WorkoutState(
             today, date, plan, workout, date == today && todayOverride != null && todayOverride.id != plan.workout?.id, session, slots, week,
@@ -317,18 +336,29 @@ fun WorkoutScreen(nav: NavController) {
         if (s.history.isNotEmpty()) {
             SectionHeader("Recent sessions")
             FormaCard {
-                s.history.forEachIndexed { i, (h, sets) ->
+                s.history.forEachIndexed { i, h ->
                     if (i > 0) Hairline()
-                    Row(Modifier.fillMaxWidth().clickable { vm.select(LocalDate.ofEpochDay(h.epochDay)) }.padding(vertical = Space.s)) {
+                    Row(Modifier.fillMaxWidth().clickable { vm.select(h.date) }.padding(vertical = Space.s).testTag("history_$i")) {
                         Column(Modifier.weight(1f)) {
-                            Text(h.title, style = Forma.type.body, color = c.text)
-                            Text(listOfNotNull(durationText(h), if (sets > 0) "$sets sets logged" else null).joinToString(" · ").ifEmpty { "Completed" },
-                                style = Forma.type.caption, color = c.textTertiary)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(h.title, style = Forma.type.body, color = c.text)
+                                if (h.watch != null) { Spacer(Modifier.width(Space.s)); Tag(if (h.forma == null) "Watch" else "+ watch data") }
+                            }
+                            val w = h.watch
+                            Text(listOfNotNull(
+                                h.forma?.let { durationText(it) } ?: w?.let { "${it.durationMinutes.toInt()} min" },
+                                if (h.setsLogged > 0) "${h.setsLogged} sets" else null,
+                                w?.avgHr?.let { "avg ${it.toInt()} bpm" }, w?.maxHr?.let { "max ${it.toInt()}" },
+                                w?.kcal?.let { "${it.toInt()} kcal" }, w?.distanceM?.takeIf { it > 0 }?.let { "${Fmt.one(it / 1609.344)} mi" },
+                                w?.dataOrigin?.let { com.forma.app.ui.metrics.appLabel(it) },
+                            ).joinToString(" · ").ifEmpty { "Completed" }, style = Forma.type.caption, color = c.textTertiary)
                         }
-                        Text(Fmt.relativeDay(LocalDate.ofEpochDay(h.epochDay), s.today), style = Forma.type.caption, color = c.textTertiary)
+                        Text(Fmt.relativeDay(h.date, s.today), style = Forma.type.caption, color = c.textTertiary)
                     }
                 }
             }
+            Text("Watch workouts from Health Connect are shown here but never change your schedule.", style = Forma.type.caption, color = c.textTertiary,
+                modifier = Modifier.padding(top = Space.xs))
         }
     }
 

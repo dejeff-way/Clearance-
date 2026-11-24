@@ -32,6 +32,13 @@ data class EnergyProfile(
     val budgetMode: BudgetMode = BudgetMode.DYNAMIC,
     val fixedBudgetKcal: Int? = null,
     val proteinTargetG: Int = 180,
+    /** Conservative adjustment to wearable-measured activity calories, in percent (e.g. -10). 0 = use as reported. */
+    val wearableAdjustmentPct: Int = 0,
+    /**
+     * In DYNAMIC mode, activity may raise the budget at most this many kcal above the sedentary-baseline budget, so a
+     * high wearable estimate can't inflate the food allowance. Null = no cap.
+     */
+    val maxActivityBudgetIncreaseKcal: Int? = 500,
 )
 
 enum class SessionSource {
@@ -72,6 +79,8 @@ data class DayEnergyInputs(
     val elapsedFraction: Double,
     val hcTotalKcal: Double? = null,
     val hcActiveKcal: Double? = null,
+    /** Health Connect basal (resting) calories for the elapsed part of the day, when a device writes them. */
+    val hcBasalKcal: Double? = null,
     val steps: Long? = null,
     val sessions: List<ActivitySession> = emptyList(),
 )

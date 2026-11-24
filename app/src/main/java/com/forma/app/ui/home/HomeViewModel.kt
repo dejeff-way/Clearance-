@@ -90,5 +90,11 @@ class HomeViewModel(private val c: AppContainer) : ViewModel() {
 
     fun deleteMeal(id: Long) = viewModelScope.launch { c.food.delete(id) }
 
+    val syncing = c.healthSyncer.running
+
+    /** Manual refresh. */
     fun sync() = viewModelScope.launch { runCatching { c.healthSyncer.sync() } }
+
+    /** Dashboard opened / resumed: refresh if the last sync is more than two minutes old. */
+    fun syncIfStale() = viewModelScope.launch { runCatching { c.healthSyncer.syncIfStale() } }
 }

@@ -204,7 +204,7 @@ class WorkoutImportTest {
         sql.execSQL("INSERT INTO substitution_prefs (slotKey, exerciseKey) VALUES ('MON_1', 'goblet_squat')")
         sql.version = 2; sql.close()
         val db = androidx.room.Room.databaseBuilder(ctx, FormaDatabase::class.java, "migrate3.db")
-            .addMigrations(FormaDatabase.MIGRATION_1_2, FormaDatabase.MIGRATION_2_3).build()
+            .addMigrations(FormaDatabase.MIGRATION_1_2, FormaDatabase.MIGRATION_2_3, FormaDatabase.MIGRATION_3_4).build()
         runBlocking {
             WorkoutLibraryRepository(db, TestEnv.time).seed()
             val cat = WorkoutCatalogLoader.load(db)

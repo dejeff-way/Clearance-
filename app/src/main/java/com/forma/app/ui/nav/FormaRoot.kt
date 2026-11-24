@@ -93,6 +93,7 @@ object Routes {
     fun addFood(day: Long, meal: String? = null) = "add_food/$day" + (meal?.let { "?meal=$it" } ?: "")
     fun energy(day: Long) = "energy/$day"
     fun activity(day: Long) = "activity_add/$day"
+    fun metric(name: String) = "metric/$name"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -145,6 +146,7 @@ fun FormaRoot(nav: NavHostController = rememberNavController()) {
                 }
                 composable(Routes.CARRYOVER) { CarryoverScreen(nav) }
                 composable(Routes.IMPORT) { RecipeImportScreen(nav) }
+                composable("metric/{name}") { com.forma.app.ui.metrics.MetricHistoryScreen(nav, it.arguments?.getString("name")!!) }
                 composable(WorkoutRoutes.LIBRARY) { WorkoutLibraryScreen(nav) }
                 composable(WorkoutRoutes.SCHEDULE) { ScheduleScreen(nav) }
                 composable(WorkoutRoutes.IMPORT) { WorkoutImportScreen(nav) }

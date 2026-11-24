@@ -74,6 +74,20 @@ fun EnergyBreakdownScreen(nav: NavController, epochDay: Long) {
                 if (e.source == ExpenditureSource.ESTIMATED) Tone.NEUTRAL else Tone.ACCENT,
             )
 
+            SectionHeader("At a glance")
+            FormaCard {
+                ValueRow("1 · Baseline energy", Fmt.kcal(e.baselineKcal), if (e.source == ExpenditureSource.ESTIMATED) "BMR × activity factor (estimated)" else "Resting energy for the day")
+                ValueRow("2 · Activity", Fmt.kcal(e.activeKcal), when (e.source) {
+                    ExpenditureSource.ESTIMATED -> "Estimated from steps or logged exercise"
+                    else -> "From your wearable via Health Connect" + if (e.wearableAdjustmentKcal != 0.0) " (adjusted ${Fmt.signed(e.wearableAdjustmentKcal.toInt())} kcal)" else ""
+                })
+                ValueRow("3 · Total energy expenditure (est.)", Fmt.kcal(e.projectedDayKcal), if (e.dayComplete) "Whole day" else "Projected for the whole day", valueColor = c.accent)
+                ValueRow("4 · Food eaten", Fmt.kcal(s.consumed.kcal))
+                ValueRow("5 · Estimated deficit", Fmt.signed(s.projectedDeficit).removePrefix("+"), "Expenditure (3) − food (4)" +
+                    if (!e.dayComplete) " if you eat nothing more today" else "", valueColor = if (s.projectedDeficit >= 0) c.accent else c.negative)
+                Text("Wearable calorie figures are estimates, not exact measurements.", style = Forma.type.caption, color = c.textTertiary)
+            }
+
             SectionHeader("1 · Estimated expenditure")
             FormaCard {
                 e.lines.forEach { l ->
@@ -97,6 +111,8 @@ fun EnergyBreakdownScreen(nav: NavController, epochDay: Long) {
                 } else {
                     ValueRow("Fixed calorie target", Fmt.kcal(p.fixedBudgetKcal ?: b.rawBudget), "Set in Settings → Targets")
                 }
+                if (b.cappedByActivityLimit) ValueRow("Activity limit", "≤ ${Fmt.kcal((b.sedentaryBudget ?: 0) + (p.maxActivityBudgetIncreaseKcal ?: 0))}",
+                    "Activity can raise the budget by at most ${p.maxActivityBudgetIncreaseKcal} kcal (Settings → Targets)", valueColor = c.warn)
                 if (b.heldAtMinimum) ValueRow("Held at minimum", Fmt.kcal(p.minimumBudgetKcal), "Raised from ${Fmt.kcal(b.rawBudget)}", valueColor = c.warn)
                 if (b.repaymentScheduled > 0) {
                     ValueRow("Carryover repayment", "−${b.repaymentApplied}",

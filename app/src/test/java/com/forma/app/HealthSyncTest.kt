@@ -68,6 +68,7 @@ class HealthSyncTest {
         c.healthSyncer.sync()
         hc.weights = hc.weights.filter { it.id == "w1" }
         hc.sessions = emptyList()
+        hc.pendingDeletes = listOf("w2", "s1") // Health Connect's change log reports the deletions
         c.healthSyncer.sync()
         assertEquals(1, c.db.body().weightCount())
         assertEquals(0, c.db.sessions().count())

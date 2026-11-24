@@ -36,7 +36,14 @@ data class Expenditure(
     val notes: List<String>,
     /** Health Connect provided a total, but it was too low to be a complete daily figure, so it was not used. */
     val healthConnectTotalRejected: Boolean = false,
-)
+    /** Resting/baseline part of [projectedDayKcal]. */
+    val baselineKcal: Double = 0.0,
+    /** Conservative adjustment applied to wearable activity (negative = reduced). */
+    val wearableAdjustmentKcal: Double = 0.0,
+) {
+    /** Activity part of [projectedDayKcal] (imported active calories, or estimated activity). */
+    val activeKcal: Double get() = (projectedDayKcal - baselineKcal).coerceAtLeast(0.0)
+}
 
 /**
  * Turns a day's raw inputs into an expenditure estimate, choosing ONE source of truth so energy is never counted twice.
@@ -84,17 +91,24 @@ object ExpenditureEstimator {
             val threshold = if (complete) COMPLETE_DAY_MIN_BMR_FRACTION * bmr
             else PARTIAL_DAY_MIN_BMR_FRACTION * bmr * max(f, 0.05)
             if (total >= threshold) {
+                val restingSoFar = input.hcBasalKcal?.takeIf { it > 0 } ?: (bmr * f)
+                val activity = max(0.0, total - restingSoFar)
+                val adj = activity * p.wearableAdjustmentPct / 100.0
+                val extra = mutableListOf<ExpenditureLine>()
+                if (adj != 0.0) extra += ExpenditureLine("Wearable adjustment (${p.wearableAdjustmentPct}% of activity)", adj, LineKind.INCLUDED,
+                    "Your conservative setting, applied to the ${activity.toInt()} kcal above resting energy.")
                 return measuredResult(
                     source = ExpenditureSource.HEALTH_CONNECT_TOTAL,
-                    measuredSoFar = total,
+                    measuredSoFar = total + adj,
                     measuredLine = ExpenditureLine(
                         if (complete) "Health Connect total burned" else "Health Connect total burned so far",
                         total, LineKind.INCLUDED,
-                        "Resting + active energy reported by your connected devices.",
+                        "Resting + active energy reported by your connected devices." +
+                            (if (input.hcBasalKcal != null) " Includes ${input.hcBasalKcal.toInt()} kcal resting (basal)." else ""),
                     ),
                     restOfDay = if (complete) 0.0 else (1 - f) * bmr * REMAINING_DAY_FACTOR,
                     p = p, input = input, sessions = sessions, duplicates = duplicates, bmr = bmr,
-                    complete = complete, net = ::net, notes = notes,
+                    complete = complete, net = ::net, notes = notes, extraLines = extra, restingSoFar = restingSoFar, adjustment = adj,
                 )
             } else {
                 rejected = true
@@ -105,18 +119,27 @@ object ExpenditureEstimator {
 
         val active = input.hcActiveKcal
         if (active != null && active > 0) {
+            val basal = input.hcBasalKcal?.takeIf { it > 0 }
+            val restingSoFar = basal ?: (bmr * f)
+            val adj = active * p.wearableAdjustmentPct / 100.0
+            val extra = mutableListOf<ExpenditureLine>()
+            if (adj != 0.0) extra += ExpenditureLine("Wearable adjustment (${p.wearableAdjustmentPct}% of activity)", adj, LineKind.INCLUDED,
+                "Your conservative setting, applied to imported active calories.")
             val r = measuredResult(
                 source = ExpenditureSource.HEALTH_CONNECT_ACTIVE,
-                measuredSoFar = bmr * f + active,
+                measuredSoFar = restingSoFar + active + adj,
                 measuredLine = ExpenditureLine(
                     "Health Connect active calories", active, LineKind.INCLUDED,
-                    "Added to an estimated resting expenditure (Mifflin–St Jeor BMR).",
+                    if (basal != null) "Added to resting energy reported by your device." else "Added to an estimated resting expenditure (Mifflin–St Jeor BMR).",
                 ),
                 restOfDay = bmr * (1 - f),
                 p = p, input = input, sessions = sessions, duplicates = duplicates, bmr = bmr,
                 complete = complete, net = ::net, notes = notes,
-                bmrLine = ExpenditureLine("Resting energy (BMR, estimated)", bmr, LineKind.INCLUDED,
-                    if (complete) null else "Full-day value; ${pct(f)} of the day has elapsed."),
+                bmrLine = if (basal != null) ExpenditureLine(if (complete) "Resting energy (Health Connect basal)" else "Resting energy so far (Health Connect basal)",
+                    basal, LineKind.INCLUDED, "Measured by your device rather than estimated.")
+                else ExpenditureLine("Resting energy (BMR, estimated)", bmr * f, LineKind.INCLUDED,
+                    if (complete) "Mifflin–St Jeor." else "Mifflin–St Jeor, for the ${pct(f)} of the day elapsed."),
+                extraLines = extra, restingSoFar = restingSoFar, adjustment = adj,
             )
             return r.copy(healthConnectTotalRejected = rejected)
         }
@@ -173,6 +196,7 @@ object ExpenditureEstimator {
             lines = lines,
             notes = notes,
             healthConnectTotalRejected = rejected,
+            baselineKcal = baseline,
         )
     }
 
@@ -190,10 +214,14 @@ object ExpenditureEstimator {
         net: (ActivitySession) -> Double,
         notes: MutableList<String>,
         bmrLine: ExpenditureLine? = null,
+        extraLines: List<ExpenditureLine> = emptyList(),
+        restingSoFar: Double = 0.0,
+        adjustment: Double = 0.0,
     ): Expenditure {
         val lines = mutableListOf<ExpenditureLine>()
         if (bmrLine != null) lines += bmrLine
         lines += measuredLine
+        lines += extraLines
         var extra = 0.0
         sessions.forEach { s ->
             if (s.source != SessionSource.HEALTH_CONNECT && !s.recordedByDevice) {
@@ -232,6 +260,8 @@ object ExpenditureEstimator {
             bmrKcal = bmr,
             lines = lines,
             notes = notes,
+            baselineKcal = restingSoFar + restOfDay,
+            wearableAdjustmentKcal = adjustment,
         )
     }
 

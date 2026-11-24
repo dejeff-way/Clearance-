@@ -17,7 +17,11 @@ data class BudgetResult(
     /** Expenditure − final budget: the deficit implied if the user eats exactly the budget. */
     val impliedDeficit: Int,
     val warnings: List<String>,
-)
+    /** Activity tried to raise the budget beyond the configured limit, so the budget was capped. */
+    val cappedByActivityLimit: Boolean = false,
+    /** Budget if activity weren't counted (sedentary baseline − deficit); the reference for the cap. */
+    val sedentaryBudget: Int? = null,
+) {}
 
 object BudgetCalculator {
     /** Deficits above this get a caution message. */
@@ -29,13 +33,28 @@ object BudgetCalculator {
         maxOf(rawBudget(p, projectedExpenditure), p.minimumBudgetKcal)
 
     fun rawBudget(p: EnergyProfile, projectedExpenditure: Double): Int = when (p.budgetMode) {
-        BudgetMode.DYNAMIC -> (projectedExpenditure - p.desiredDeficitKcal).roundToInt()
+        BudgetMode.DYNAMIC -> {
+            val dynamic = (projectedExpenditure - p.desiredDeficitKcal).roundToInt()
+            activityCap(p)?.let { minOf(dynamic, it) } ?: dynamic
+        }
         BudgetMode.FIXED -> p.fixedBudgetKcal ?: (projectedExpenditure - p.desiredDeficitKcal).roundToInt()
     }
+
+    /** Sedentary-baseline budget, i.e. what the budget would be with no measured activity at all. */
+    fun sedentaryBudget(p: EnergyProfile): Int = (Metabolism.baseline(p) - p.desiredDeficitKcal).roundToInt()
+
+    /** Highest budget activity may produce in DYNAMIC mode, or null when uncapped. */
+    fun activityCap(p: EnergyProfile): Int? = p.maxActivityBudgetIncreaseKcal?.takeIf { it > 0 }?.let { sedentaryBudget(p) + it }
 
     fun compute(p: EnergyProfile, projectedExpenditure: Double, repaymentScheduled: Int): BudgetResult {
         val warnings = mutableListOf<String>()
         val raw = rawBudget(p, projectedExpenditure)
+        val uncapped = (projectedExpenditure - p.desiredDeficitKcal).roundToInt()
+        val capped = p.budgetMode == BudgetMode.DYNAMIC && raw < uncapped
+        if (capped) {
+            warnings += "Your activity would add ${uncapped - sedentaryBudget(p)} kcal to today's budget. FORMA limits the increase to " +
+                "${p.maxActivityBudgetIncreaseKcal} kcal because wearable calorie estimates often run high. The extra activity still counts toward your actual deficit."
+        }
         val held = raw < p.minimumBudgetKcal
         val base = maxOf(raw, p.minimumBudgetKcal)
         if (held) {
@@ -70,6 +89,8 @@ object BudgetCalculator {
             plannedDeficit = deficitReq,
             impliedDeficit = (projectedExpenditure - final).roundToInt(),
             warnings = warnings,
+            cappedByActivityLimit = capped,
+            sedentaryBudget = sedentaryBudget(p),
         )
     }
 }
@@ -91,6 +112,9 @@ data class DaySummary(
     val projectedDeficit: Int get() = (expenditure.projectedDayKcal - consumed.kcal).roundToInt()
 
     val proteinRemainingG: Int get() = (proteinTargetG - consumed.proteinG).roundToInt().coerceAtLeast(0)
+
+    /** Within today's budget (calories remaining ≥ 0). */
+    val onTrack: Boolean get() = remainingKcal >= 0
 
     /** Over budget by this many kcal (0 when within budget). */
     val overBudgetKcal: Int get() = (-remainingKcal).coerceAtLeast(0)

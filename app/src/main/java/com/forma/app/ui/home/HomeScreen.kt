@@ -66,6 +66,8 @@ import kotlin.math.roundToInt
 fun HomeScreen(nav: NavController) {
     val vm = formaViewModel { HomeViewModel(it) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val syncing by vm.syncing.collectAsStateWithLifecycle()
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { vm.syncIfStale() }
     var weightSheet by remember { mutableStateOf(false) }
     val s = state ?: return Box(Modifier.fillMaxSize())
     val c = Forma.colors
@@ -86,6 +88,7 @@ fun HomeScreen(nav: NavController) {
             Tag("${Fmt.weight(s.profile.currentWeightLb, s.settings.weightUnit)} ${Fmt.weightUnit(s.settings.weightUnit)}")
             Tag(activityStatus(s), tone = if (s.workout.done) Tone.ACCENT else Tone.NEUTRAL)
         }
+        SyncStatusRow(s.sync, syncing, onRefresh = { vm.sync() }, onOpen = { nav.navigate(Routes.HEALTH) })
 
         // ── Daily summary hero ───────────────────────────────────
         Spacer(Modifier.height(Space.xl))
@@ -117,8 +120,10 @@ fun HomeScreen(nav: NavController) {
             Spacer(Modifier.height(Space.m))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Projected expenditure ${Fmt.kcal(sum.expenditure.projectedDayKcal)} · planned deficit ${Fmt.kcal(sum.budget.plannedDeficit)}",
+                    Text("Baseline ${Fmt.kcal(sum.expenditure.baselineKcal)} + activity ${Fmt.kcal(sum.expenditure.activeKcal)} = ${Fmt.kcal(sum.expenditure.projectedDayKcal)} kcal projected",
                         style = Forma.type.caption, color = c.textSecondary)
+                    Text("Planned deficit ${Fmt.kcal(sum.budget.plannedDeficit)} · " + if (sum.onTrack) "on track" else "over budget by ${Fmt.kcal(sum.overBudgetKcal)}",
+                        style = Forma.type.caption, color = if (sum.onTrack) c.accent else c.negative, modifier = Modifier.testTag("on_track"))
                     if (sum.budget.repaymentApplied > 0) {
                         Text("Carryover repayment −${sum.budget.repaymentApplied} kcal today", style = Forma.type.caption, color = c.warn)
                     }
@@ -127,7 +132,7 @@ fun HomeScreen(nav: NavController) {
             }
         }
         sum.budget.warnings.forEach { w ->
-            Spacer(Modifier.height(Space.s)); Note(w, Tone.WARN)
+            Spacer(Modifier.height(Space.s)); Note(w, if (sum.budget.cappedByActivityLimit && w.contains("limits the increase")) Tone.NEUTRAL else Tone.WARN)
         }
 
         // ── Quick actions ────────────────────────────────────────
@@ -157,20 +162,9 @@ fun HomeScreen(nav: NavController) {
             ThinProgress((sum.consumed.proteinG / sum.proteinTargetG).toFloat())
         }
 
-        // ── Activity ─────────────────────────────────────────────
-        Spacer(Modifier.height(Space.m))
-        val energy = s.model.s.energy[day]
-        val hcConnected = !s.sync?.grantedPermissions.isNullOrBlank()
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-            MiniCard(Icons.AutoMirrored.Outlined.DirectionsWalk, "Steps",
-                energy?.steps?.let { Fmt.int(it) } ?: "—",
-                if (energy?.steps != null) "Health Connect" else if (hcConnected) "No data yet" else "Not connected",
-                Modifier.weight(1f)) { nav.navigate(Routes.HEALTH) }
-            MiniCard(Icons.Outlined.Bedtime, "Sleep",
-                energy?.sleepMinutes?.let { "${(it / 60).toInt()}h ${(it % 60).toInt()}m" } ?: "—",
-                if (energy?.sleepMinutes != null) "Last night" else if (hcConnected) "No data" else "Not connected",
-                Modifier.weight(1f)) { nav.navigate(Routes.HEALTH) }
-        }
+        // ── Activity & health (live from Health Connect) ─────────
+        SectionHeader("Activity & health", action = "Trends", onAction = { nav.navigate(Routes.PROGRESS) })
+        ActivityGrid(s.model, s.sync, s.settings) { m -> nav.navigate(Routes.metric(m.name)) }
 
         // ── Today's meals ────────────────────────────────────────
         SectionHeader("Today's meals", action = "Food log", onAction = { nav.navigate(Routes.log(day)) })
@@ -295,17 +289,21 @@ private fun SourceTag(src: ExpenditureSource, rejected: Boolean) {
 }
 
 @Composable
-private fun MiniCard(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, sub: String, modifier: Modifier, onClick: () -> Unit) {
+private fun SyncStatusRow(sync: com.forma.app.data.db.SyncMetaEntity?, syncing: Boolean, onRefresh: () -> Unit, onOpen: () -> Unit) {
     val c = Forma.colors
-    FormaCard(modifier, onClick = onClick) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = c.textTertiary, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(Space.xs))
-            Text(label, style = Forma.type.caption, color = c.textSecondary)
-        }
-        Spacer(Modifier.height(Space.s))
-        Text(value, style = Forma.type.numberLarge, color = c.text)
-        Text(sub, style = Forma.type.caption, color = c.textTertiary)
+    val connected = !sync?.grantedPermissions.isNullOrBlank()
+    Row(Modifier.fillMaxWidth().padding(top = Space.s), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            when {
+                syncing -> "Syncing with Health Connect…"
+                !connected -> "Health Connect not connected"
+                sync?.lastSuccessAt != null -> "Health Connect · synced ${Fmt.ago(sync.lastSuccessAt, System.currentTimeMillis())}"
+                else -> "Health Connect · not synced yet"
+            } + (sync?.lastError?.takeIf { connected && !syncing && it.isNotBlank() }?.let { " · last attempt failed" } ?: ""),
+            style = Forma.type.caption, color = c.textTertiary, modifier = Modifier.weight(1f).testTag("sync_status"),
+        )
+        if (connected) com.forma.app.ui.components.TextAction(if (syncing) "…" else "Refresh", onRefresh, modifier = Modifier.testTag("sync_refresh"))
+        else com.forma.app.ui.components.TextAction("Connect", onOpen)
     }
 }
 

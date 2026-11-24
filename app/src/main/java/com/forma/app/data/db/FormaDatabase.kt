@@ -15,7 +15,7 @@ import androidx.room.TypeConverters
         ExerciseEntity::class, WorkoutEntity::class, WorkoutSlotEntity::class, ProgramEntity::class, ProgramDayEntity::class,
         ActiveProgramEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -32,6 +32,38 @@ abstract class FormaDatabase : RoomDatabase() {
     abstract fun library(): WorkoutLibraryDao
 
     companion object {
+        /** v3 → v4: wearable metrics (heart rate, HRV, sleep stages, distance…), step goal and sync tokens. */
+        val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN hcBasalKcal REAL")
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN distanceM REAL")
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN floors REAL")
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN avgHr REAL")
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN minHr REAL")
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN maxHr REAL")
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN restingHr REAL")
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN hrvMs REAL")
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN spo2Pct REAL")
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN respRate REAL")
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN bodyFatPct REAL")
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN sleepDeepMin REAL")
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN sleepLightMin REAL")
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN sleepRemMin REAL")
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN sleepAwakeMin REAL")
+                db.execSQL("ALTER TABLE daily_energy ADD COLUMN sources TEXT")
+                db.execSQL("ALTER TABLE exercise_sessions ADD COLUMN avgHr REAL")
+                db.execSQL("ALTER TABLE exercise_sessions ADD COLUMN maxHr REAL")
+                db.execSQL("ALTER TABLE exercise_sessions ADD COLUMN distanceM REAL")
+                db.execSQL("ALTER TABLE exercise_sessions ADD COLUMN dataOrigin TEXT")
+                db.execSQL("ALTER TABLE profile ADD COLUMN stepGoal INTEGER NOT NULL DEFAULT 10000")
+                db.execSQL("ALTER TABLE profile ADD COLUMN wearableAdjustmentPct INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE profile ADD COLUMN maxActivityBonusKcal INTEGER NOT NULL DEFAULT 500")
+                db.execSQL("ALTER TABLE sync_meta ADD COLUMN changesToken TEXT")
+                db.execSQL("ALTER TABLE sync_meta ADD COLUMN tokenTypes TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE sync_meta ADD COLUMN diagnostics TEXT")
+                db.execSQL("ALTER TABLE sync_meta ADD COLUMN lastSyncMode TEXT")
+            }
+        }
         /** v2 → v3: workout library, programs and active schedule (seeded from the built-in plan on first launch). */
         val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
@@ -63,7 +95,7 @@ abstract class FormaDatabase : RoomDatabase() {
         fun create(context: Context, inMemory: Boolean = false): FormaDatabase {
             val b = if (inMemory) Room.inMemoryDatabaseBuilder(context, FormaDatabase::class.java)
             else Room.databaseBuilder(context, FormaDatabase::class.java, "forma.db")
-            return b.addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
+            return b.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
         }
     }
 }

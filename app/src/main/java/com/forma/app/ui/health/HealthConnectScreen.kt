@@ -46,6 +46,8 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
+import java.time.LocalDate
+import com.forma.app.ui.components.TextAction
 import com.forma.app.di.AppContainer
 import com.forma.app.health.HcAvailability
 import com.forma.app.health.HcDataType
@@ -134,6 +136,7 @@ fun HealthConnectScreen(nav: NavController) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val meta by vm.meta.collectAsStateWithLifecycle(null)
     val context = LocalContext.current
+    val container = com.forma.app.ui.LocalContainer.current
     val c = Forma.colors
     var confirmDisconnect by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) { vm.onPermissionsResult() }
@@ -177,6 +180,15 @@ fun HealthConnectScreen(nav: NavController) {
                     PrimaryButton(if (connected) "Review permissions" else "Connect Health Connect", {
                         runCatching { permissionLauncher.launch(HealthConnectSource.readPermissions) }
                     }, Modifier.fillMaxWidth().testTag("hc_connect"))
+                    val missing = HcDataType.entries.filter { it !in ui.granted }
+                    if (connected && missing.isNotEmpty()) {
+                        Spacer(Modifier.height(Space.s))
+                        Note("${missing.size} data type${if (missing.size == 1) " isn't" else "s aren't"} allowed yet: ${missing.joinToString { it.label.lowercase() }}. " +
+                            "FORMA only asks for these — what you've already allowed stays as is.", Tone.NEUTRAL)
+                        TextAction("Allow ${missing.size} more", {
+                            runCatching { permissionLauncher.launch(missing.map { HealthConnectSource.permissionFor(it) }.toSet()) }
+                        }, modifier = Modifier.testTag("hc_allow_more"))
+                    }
                     if (connected) {
                         Spacer(Modifier.height(Space.s))
                         SecondaryButton(if (ui.syncing) "Syncing…" else "Sync now", { vm.syncNow() }, Modifier.fillMaxWidth().testTag("hc_sync"),
@@ -201,22 +213,39 @@ fun HealthConnectScreen(nav: NavController) {
                 }
             }
 
-            SectionHeader("Data FORMA reads")
+            SectionHeader("Data check · last 30 days")
+            val model by container.energyModel.collectAsStateWithLifecycle()
+            val sessions by container.activity.sessions.collectAsStateWithLifecycle(emptyList())
+            val weights by container.body.weights.collectAsStateWithLifecycle(emptyList())
             FormaCard {
                 HcDataType.entries.forEachIndexed { i, t ->
                     if (i > 0) Hairline()
                     val ok = t in ui.granted
-                    Row(Modifier.fillMaxWidth().padding(vertical = Space.m).testTag("hc_type_${t.name}"), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (ok) Icons.Outlined.Check else Icons.Outlined.Close, null, tint = if (ok) c.accent else c.textTertiary, modifier = Modifier.size(18.dp))
+                    val check = model?.let { dataCheck(t, it, sessions, weights) }
+                    Row(Modifier.fillMaxWidth().padding(vertical = Space.m).testTag("hc_type_${t.name}"), verticalAlignment = Alignment.Top) {
+                        Icon(if (ok) Icons.Outlined.Check else Icons.Outlined.Close, null, tint = if (ok) c.accent else c.textTertiary,
+                            modifier = Modifier.size(18.dp).padding(top = 2.dp))
                         Spacer(Modifier.width(Space.m))
                         Column(Modifier.weight(1f)) {
                             Text(t.label, style = Forma.type.body, color = c.text)
-                            Text(t.purpose, style = Forma.type.caption, color = c.textTertiary)
+                            Text(
+                                when {
+                                    !ok && ui.availability == HcAvailability.AVAILABLE -> "Not allowed — ${t.purpose.replaceFirstChar { it.lowercase() }} is unavailable."
+                                    !ok -> t.purpose
+                                    check == null || check.days == 0 -> "Allowed, but no records found yet. Your device may not share this with Health Connect."
+                                    else -> "Data on ${check.days} of 30 days · latest ${check.latest?.let { Fmt.relativeDay(it, LocalDate.now()).lowercase() } ?: "—"}" +
+                                        (if (check.sources.isNotEmpty()) " · ${check.sources.joinToString { com.forma.app.ui.metrics.appLabel(it) }}" else "")
+                                },
+                                style = Forma.type.caption, color = if (ok && (check?.days ?: 0) == 0) c.warn else c.textTertiary,
+                                modifier = Modifier.testTag("hc_check_${t.name}"),
+                            )
                         }
-                        Tag(if (ok) "Authorised" else if (ui.availability == HcAvailability.AVAILABLE) "Not authorised" else "Unavailable", if (ok) Tone.ACCENT else Tone.NEUTRAL)
+                        Tag(if (!ok) (if (ui.availability == HcAvailability.AVAILABLE) "Not allowed" else "Unavailable") else if ((check?.days ?: 0) > 0) "Receiving" else "No data",
+                            if (ok && (check?.days ?: 0) > 0) Tone.ACCENT else Tone.NEUTRAL)
                     }
                 }
             }
+            meta?.lastSyncMode?.let { Text("Last sync: $it", style = Forma.type.caption, color = c.textTertiary, modifier = Modifier.padding(top = Space.xs)) }
             Spacer(Modifier.height(Space.s))
             Text("FORMA only reads data. It never writes to Health Connect, and nothing leaves your phone. " +
                 "It reads up to 30 days back (the default without the history permission).",
@@ -266,4 +295,38 @@ private fun openHcSettings(context: android.content.Context) {
     else Intent(HealthConnectClient.ACTION_HEALTH_CONNECT_SETTINGS)
     runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         .onFailure { runCatching { context.startActivity(Intent(HealthConnectClient.ACTION_HEALTH_CONNECT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+}
+
+
+/** What FORMA has actually received for a data type over the last 30 days. */
+data class DataCheck(val days: Int, val latest: LocalDate?, val sources: Set<String>)
+
+fun dataCheck(
+    t: HcDataType, m: com.forma.app.data.repo.EnergyModel,
+    sessions: List<com.forma.app.data.db.ExerciseSessionEntity>, weights: List<com.forma.app.data.db.WeightEntity>,
+): DataCheck {
+    val today = m.s.today
+    val window = (0 until 30).map { today.minusDays(it.toLong()) }
+    val rows = window.mapNotNull { d -> m.s.energy[d.toEpochDay()]?.let { d to it } }
+    val from = today.minusDays(29).toEpochDay()
+    val days: List<LocalDate> = when (t) {
+        HcDataType.EXERCISE -> sessions.filter { it.source == "HEALTH_CONNECT" && it.epochDay >= from }.map { LocalDate.ofEpochDay(it.epochDay) }
+        HcDataType.WEIGHT -> weights.filter { it.source == "HEALTH_CONNECT" && it.epochDay >= from }.map { LocalDate.ofEpochDay(it.epochDay) }
+        else -> rows.filter { (_, e) ->
+            when (t) {
+                HcDataType.TOTAL_CALORIES -> e.hcTotalKcal != null; HcDataType.ACTIVE_CALORIES -> e.hcActiveKcal != null
+                HcDataType.BASAL_CALORIES -> e.hcBasalKcal != null; HcDataType.STEPS -> e.steps != null
+                HcDataType.DISTANCE -> e.distanceM != null; HcDataType.FLOORS -> e.floors != null
+                HcDataType.HEART_RATE -> e.avgHr != null; HcDataType.RESTING_HEART_RATE -> e.restingHr != null
+                HcDataType.HRV -> e.hrvMs != null; HcDataType.SLEEP -> e.sleepMinutes != null
+                HcDataType.OXYGEN_SATURATION -> e.spo2Pct != null; HcDataType.RESPIRATORY_RATE -> e.respRate != null
+                HcDataType.BODY_FAT -> e.bodyFatPct != null; else -> false
+            }
+        }.map { it.first }
+    }.distinct()
+    val sources = when (t) {
+        HcDataType.EXERCISE -> sessions.filter { it.source == "HEALTH_CONNECT" && it.epochDay >= from }.mapNotNull { it.dataOrigin }.toSet()
+        else -> rows.flatMap { (_, e) -> com.forma.app.health.HealthSyncer.decodeSources(e.sources)[t].orEmpty() }.toSet()
+    }
+    return DataCheck(days.size, days.maxOrNull(), sources)
 }

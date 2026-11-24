@@ -135,7 +135,8 @@ class UiFlowTest {
 
     @Test fun `health connect unavailable and permission denied states`() {
         rule.onNodeWithTag("tab_settings").performClick()
-        rule.onNodeWithText("Health Connect", useUnmergedTree = true).performScrollTo().performClick()
+        waitFor { rule.onAllNodesWithTagExists("settings") }
+        rule.onNode(androidx.compose.ui.test.hasText("Health Connect", substring = false), useUnmergedTree = true).performScrollTo().performClick()
         waitFor { rule.onAllNodesWithTagExists("hc_status") && text("hc_status") == "Not available on this device" }
         rule.onNodeWithTag("hc_type_TOTAL_CALORIES").assertIsDisplayed()
 

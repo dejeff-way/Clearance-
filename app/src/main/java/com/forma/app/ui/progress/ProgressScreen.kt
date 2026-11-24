@@ -1,6 +1,7 @@
 package com.forma.app.ui.progress
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -232,6 +233,36 @@ fun ProgressScreen(nav: NavController) {
                 }
             }
         }
+
+        // ── Activity & health trends ───────────────────────────
+        SectionHeader("Activity & health trends")
+        FormaCard(padding = androidx.compose.foundation.layout.PaddingValues(horizontal = Space.l, vertical = Space.xs)) {
+            val shown = com.forma.app.ui.metrics.Metric.entries.filter { mt ->
+                mt == com.forma.app.ui.metrics.Metric.WORKOUTS ||
+                    com.forma.app.ui.metrics.MetricValues.series(mt, m, 30, s.settings).any { it.second != null }
+            }
+            shown.forEachIndexed { i, mt ->
+                if (i > 0) Hairline()
+                val last7 = com.forma.app.ui.metrics.MetricValues.series(mt, m, 7, s.settings).mapNotNull { it.second }
+                val spark = com.forma.app.ui.metrics.MetricValues.series(mt, m, 30, s.settings).mapNotNull { it.second }
+                val weeklyWorkouts = if (mt == com.forma.app.ui.metrics.Metric.WORKOUTS) com.forma.app.ui.metrics.MetricValues.weekly(mt, m, 8, s.settings).mapNotNull { it.second } else emptyList()
+                Row(Modifier.fillMaxWidth().clickable { nav.navigate(com.forma.app.ui.nav.Routes.metric(mt.name)) }.padding(vertical = Space.m)
+                    .testTag("trend_${mt.name}"), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(mt.label, style = Forma.type.body, color = c.text)
+                        Text(
+                            if (mt == com.forma.app.ui.metrics.Metric.WORKOUTS) "${weeklyWorkouts.lastOrNull()?.toInt() ?: 0} this week · ${Fmt.one(weeklyWorkouts.average().takeIf { !it.isNaN() } ?: 0.0)}/week avg"
+                            else last7.takeIf { it.isNotEmpty() }?.let { "7-day avg ${mt.format(it.average())} ${mt.unit(s.settings)}" } ?: "No data in the last 7 days",
+                            style = Forma.type.caption, color = c.textTertiary,
+                        )
+                    }
+                    com.forma.app.ui.components.Sparkline(if (mt == com.forma.app.ui.metrics.Metric.WORKOUTS) weeklyWorkouts else spark,
+                        Modifier.size(width = 72.dp, height = 28.dp))
+                }
+            }
+        }
+        Text("Weekly averages matter more than any single day. Tap a row for 7, 30 and 90-day views.", style = Forma.type.caption, color = c.textTertiary,
+            modifier = Modifier.padding(top = Space.xs))
 
         // ── Waist ───────────────────────────────────────────────
         SectionHeader("Waist", action = "Add", onAction = { waistSheet = true })

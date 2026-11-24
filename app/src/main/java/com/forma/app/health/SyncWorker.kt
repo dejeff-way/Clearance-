@@ -17,7 +17,7 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
     override suspend fun doWork(): Result {
         val c = (applicationContext as FormaApp).container
         if (!c.healthSource.backgroundReadGranted()) return Result.success()
-        return when (c.healthSyncer.sync(3)) {
+        return when (c.healthSyncer.sync()) {
             is SyncOutcome.Failed -> Result.retry()
             else -> Result.success()
         }

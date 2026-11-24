@@ -74,7 +74,7 @@ class EnergyModel(val s: EnergySnapshot) {
                 met = t?.met ?: 4.5, recordedByDevice = true,
             )
         }
-        return DayEnergyInputs(day, f, e?.hcTotalKcal, e?.hcActiveKcal, e?.steps, manual + program)
+        return DayEnergyInputs(day, f, e?.hcTotalKcal, e?.hcActiveKcal, e?.hcBasalKcal, e?.steps, manual + program)
     }
 
     fun consumed(day: LocalDate): Macros {
@@ -119,6 +119,8 @@ fun ProfileEntity.toEnergyProfile(weightLb: Double = currentWeightLb) = EnergyPr
     maxCarryoverRepaymentPerDay = maxRepaymentPerDay,
     budgetMode = if (budgetMode == BudgetMode.FIXED.name) BudgetMode.FIXED else BudgetMode.DYNAMIC,
     fixedBudgetKcal = fixedBudgetKcal, proteinTargetG = proteinTargetG,
+    wearableAdjustmentPct = wearableAdjustmentPct,
+    maxActivityBudgetIncreaseKcal = maxActivityBonusKcal.takeIf { it > 0 },
 )
 
 fun ExerciseSessionEntity.toActivity() = ActivitySession(

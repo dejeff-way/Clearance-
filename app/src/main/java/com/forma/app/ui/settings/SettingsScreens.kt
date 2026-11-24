@@ -343,6 +343,9 @@ fun TargetsEditScreen(nav: NavController) {
     var repay by remember(p.id) { mutableStateOf(p.maxRepaymentPerDay.toString()) }
     var baseline by remember(p.id) { mutableStateOf(p.baselineActivityFactor) }
     var maint by remember(p.id) { mutableStateOf(p.maintenanceActivityFactor) }
+    var stepGoal by remember(p.id) { mutableStateOf(p.stepGoal.toString()) }
+    var adjPct by remember(p.id) { mutableStateOf(p.wearableAdjustmentPct) }
+    var bonusCap by remember(p.id) { mutableStateOf(p.maxActivityBonusKcal) }
     var error by remember { mutableStateOf<String?>(null) }
     val dVal = deficit.toIntOrNull()
 
@@ -375,6 +378,27 @@ fun TargetsEditScreen(nav: NavController) {
             Spacer(Modifier.height(Space.s))
             FormaField(repay, { repay = it }, "Max carryover repayment", suffix = "kcal/day", numeric = true, decimal = false, modifier = Modifier.testTag("repay_input"))
 
+            SectionHeader("Activity")
+            FormaField(stepGoal, { stepGoal = it }, "Daily step goal", suffix = "steps", numeric = true, decimal = false, modifier = Modifier.testTag("step_goal_input"))
+            Spacer(Modifier.height(Space.m))
+            Text("Wearable calorie adjustment", style = Forma.type.caption, color = c.textSecondary)
+            Spacer(Modifier.height(Space.s))
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                listOf(0, -5, -10, -15).forEach { v -> Chip(if (v == 0) "None" else "$v%", adjPct == v, { adjPct = v }, Modifier.testTag("adj_$v")) }
+            }
+            Text("Wearables often overestimate activity calories. This trims only the activity part (never resting energy) before it counts.",
+                style = Forma.type.caption, color = c.textTertiary, modifier = Modifier.padding(top = Space.xs))
+            if (mode == BudgetMode.DYNAMIC) {
+                Spacer(Modifier.height(Space.m))
+                Text("Most activity can add to your food budget", style = Forma.type.caption, color = c.textSecondary)
+                Spacer(Modifier.height(Space.s))
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    listOf(300, 500, 800, 0).forEach { v -> Chip(if (v == 0) "No limit" else "+$v", bonusCap == v, { bonusCap = v }, Modifier.testTag("cap_$v")) }
+                }
+                Text("Active days still raise your budget, but never by more than this. Your actual deficit always uses the full estimate.",
+                    style = Forma.type.caption, color = c.textTertiary, modifier = Modifier.padding(top = Space.xs))
+            }
+
             SectionHeader("Estimation (advanced)")
             Text("Baseline activity factor — used only when Health Connect has no expenditure for a day.", style = Forma.type.caption, color = c.textSecondary)
             Spacer(Modifier.height(Space.s))
@@ -390,6 +414,7 @@ fun TargetsEditScreen(nav: NavController) {
             }
             model?.let { m ->
                 val preview = p.copy(baselineActivityFactor = baseline, desiredDeficitKcal = dVal ?: p.desiredDeficitKcal,
+                    wearableAdjustmentPct = adjPct, maxActivityBonusKcal = bonusCap,
                     minimumBudgetKcal = minimum.toIntOrNull() ?: p.minimumBudgetKcal, budgetMode = mode.name,
                     fixedBudgetKcal = fixed.toIntOrNull()).toEnergyProfile(m.weightOn(m.s.today))
                 val exp = com.forma.engine.ExpenditureEstimator.estimate(preview, m.inputs(m.s.today))
@@ -411,12 +436,14 @@ fun TargetsEditScreen(nav: NavController) {
                     pr == null || pr !in 40..400 -> error = "Protein must be between 40 and 400 g"
                     mn == null || mn !in 1200..5000 -> error = "Minimum budget must be between 1,200 and 5,000 kcal"
                     r == null || r !in 0..500 -> error = "Repayment must be between 0 and 500 kcal/day"
+                    stepGoal.toIntOrNull() == null || stepGoal.toInt() !in 1000..50000 -> error = "Step goal must be between 1,000 and 50,000"
                     mode == BudgetMode.FIXED && (fx == null || fx !in 1200..6000) -> error = "Fixed target must be between 1,200 and 6,000 kcal"
                     else -> scope.launch {
                         container.profile.update {
                             it.copy(budgetMode = mode.name, fixedBudgetKcal = if (mode == BudgetMode.FIXED) fx else it.fixedBudgetKcal,
                                 desiredDeficitKcal = d, proteinTargetG = pr, minimumBudgetKcal = mn, maxRepaymentPerDay = r,
-                                baselineActivityFactor = baseline, maintenanceActivityFactor = maint)
+                                baselineActivityFactor = baseline, maintenanceActivityFactor = maint,
+                                stepGoal = stepGoal.toInt(), wearableAdjustmentPct = adjPct, maxActivityBonusKcal = bonusCap)
                         }
                         nav.popOnMain()
                     }

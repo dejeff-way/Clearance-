@@ -34,6 +34,12 @@ data class ProfileEntity(
     val fixedBudgetKcal: Int? = null,
     val proteinTargetG: Int = 180,
     val programStartEpochDay: Long,
+    // ── v4 (wearable integration) ──
+    @ColumnInfo(defaultValue = "10000") val stepGoal: Int = 10000,
+    /** Conservative adjustment applied to wearable activity calories, e.g. -10 = count 90% of activity. */
+    @ColumnInfo(defaultValue = "0") val wearableAdjustmentPct: Int = 0,
+    /** Max kcal that activity may add to the food budget above the sedentary-baseline budget. 0 = no cap. */
+    @ColumnInfo(defaultValue = "500") val maxActivityBonusKcal: Int = 500,
     val updatedAt: Long = System.currentTimeMillis(),
 )
 
@@ -135,6 +141,24 @@ data class DailyEnergyEntity(
     val exerciseMinutes: Double? = null,
     val sleepMinutes: Double? = null,
     val syncedAt: Long? = null,
+    // ── v4 ──
+    val hcBasalKcal: Double? = null,
+    val distanceM: Double? = null,
+    val floors: Double? = null,
+    val avgHr: Double? = null,
+    val minHr: Double? = null,
+    val maxHr: Double? = null,
+    val restingHr: Double? = null,
+    val hrvMs: Double? = null,
+    val spo2Pct: Double? = null,
+    val respRate: Double? = null,
+    val bodyFatPct: Double? = null,
+    val sleepDeepMin: Double? = null,
+    val sleepLightMin: Double? = null,
+    val sleepRemMin: Double? = null,
+    val sleepAwakeMin: Double? = null,
+    /** Comma-separated package names of the apps that supplied this day's data. */
+    val sources: String? = null,
 )
 
 @Serializable
@@ -158,6 +182,11 @@ data class ExerciseSessionEntity(
     val hcId: String? = null,
     val note: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
+    // ── v4 ──
+    val avgHr: Double? = null,
+    val maxHr: Double? = null,
+    val distanceM: Double? = null,
+    val dataOrigin: String? = null,
 )
 
 @Serializable
@@ -254,6 +283,13 @@ data class SyncMetaEntity(
     val grantedPermissions: String = "",
     val backgroundSyncEnabled: Boolean = false,
     val lastRecordCount: Int = 0,
+    // ── v4 ──
+    val changesToken: String? = null,
+    /** Data types the change token covers; a permission change invalidates it. */
+    @ColumnInfo(defaultValue = "''") val tokenTypes: String = "",
+    /** JSON summary of what Health Connect contains (per data type). */
+    val diagnostics: String? = null,
+    val lastSyncMode: String? = null,
 )
 
 /** Aggregated daily food totals (query projection). */
