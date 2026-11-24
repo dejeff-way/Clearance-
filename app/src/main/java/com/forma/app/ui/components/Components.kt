@@ -290,7 +290,12 @@ fun FormaField(
     val c = Forma.colors
     OutlinedTextField(
         value = value,
-        onValueChange = { v -> if (!numeric || v.isEmpty() || v.matches(Regex(if (decimal) "^\\d*[.,]?\\d*$" else "^\\d*$"))) onValueChange(v.replace(',', '.')) },
+        onValueChange = { v ->
+            when {
+                !numeric -> onValueChange(v)
+                v.isEmpty() || v.matches(Regex(if (decimal) "^\\d*[.,]?\\d*$" else "^\\d*$")) -> onValueChange(v.replace(',', '.'))
+            }
+        },
         label = { Text(label) },
         modifier = modifier.fillMaxWidth(),
         singleLine = singleLine,

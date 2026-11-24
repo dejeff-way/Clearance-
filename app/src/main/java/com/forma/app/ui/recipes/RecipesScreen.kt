@@ -100,7 +100,7 @@ fun RecipesScreen(nav: NavController) {
             Filter.MINE -> !it.recipe.builtIn
             else -> it.recipe.category == filter.cat!!.name
         }) &&
-            (query.isBlank() || it.recipe.name.contains(query, true) || it.recipe.summary.contains(query, true))
+            (query.isBlank() || it.recipe.name.contains(query, true) || it.recipe.summary.contains(query, true) || it.recipe.tags.any { t -> t.contains(query.trim().replace(' ', '-'), true) })
     }
     LazyColumn(
         Modifier.fillMaxSize().statusBarsPadding().testTag("recipes"),
@@ -109,6 +109,7 @@ fun RecipesScreen(nav: NavController) {
     ) {
         item {
             ScreenTitle("Recipes", subtitle = "${all.size} kosher recipes") {
+                com.forma.app.ui.components.TextAction("Import", { nav.navigate(Routes.IMPORT) }, color = Forma.colors.textSecondary, modifier = Modifier.testTag("import_recipes"))
                 com.forma.app.ui.components.TextAction("+ New", { nav.navigate(Routes.newRecipe()) }, modifier = Modifier.testTag("new_recipe"))
             }
             Spacer(Modifier.height(Space.m))

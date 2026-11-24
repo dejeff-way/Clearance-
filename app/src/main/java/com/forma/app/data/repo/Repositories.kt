@@ -99,6 +99,15 @@ class RecipeRepository(private val db: FormaDatabase) {
             builtIn = false, sortOrder = order, isFavorite = existing?.isFavorite ?: recipe.isFavorite,
             photoUri = existing?.photoUri ?: recipe.photoUri,
             usesMilkChoice = ingredients.any { it.isMilk },
+            // Fields the editor doesn't show are carried over from the stored recipe.
+            tags = recipe.tags.ifEmpty { existing?.tags.orEmpty() },
+            fiberG = recipe.fiberG ?: existing?.fiberG,
+            servings = existing?.servings ?: recipe.servings,
+            storageNotes = recipe.storageNotes.ifEmpty { existing?.storageNotes.orEmpty() },
+            nutritionSource = existing?.nutritionSource ?: recipe.nutritionSource,
+            origin = existing?.origin ?: if (recipe.origin == "BUILT_IN") "USER" else recipe.origin,
+            importedAt = existing?.importedAt ?: recipe.importedAt,
+            sourceJson = existing?.sourceJson ?: recipe.sourceJson,
         )
         db.recipes().replaceRecipe(r, ingredients.mapIndexed { i, g -> g.copy(recipeId = r.id, position = i) })
         return r.id

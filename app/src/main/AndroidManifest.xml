@@ -11,6 +11,9 @@
     <!-- Optional: only requested if the user turns on background sync. -->
     <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
 
+    <!-- Only used to download recipe images referenced by imported recipes. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
     </queries>

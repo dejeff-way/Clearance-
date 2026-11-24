@@ -1,5 +1,6 @@
 package com.forma.app.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -87,6 +88,20 @@ data class RecipeEntity(
     val builtIn: Boolean = true,
     val seedVersion: Int = 1,
     val sortOrder: Int = 0,
+    // ── v2 (recipe import) ──
+    @ColumnInfo(defaultValue = "'[]'") val tags: List<String> = emptyList(),
+    /** Fiber per standard serving, when known. */
+    val fiberG: Double? = null,
+    /** Servings the original batch made. Ingredient amounts are stored per serving. */
+    @ColumnInfo(defaultValue = "1") val servings: Int = 1,
+    @ColumnInfo(defaultValue = "'[]'") val storageNotes: List<String> = emptyList(),
+    /** ESTIMATED or VERIFIED_LABELS. */
+    @ColumnInfo(defaultValue = "'ESTIMATED'") val nutritionSource: String = "ESTIMATED",
+    /** BUILT_IN, USER or IMPORT. */
+    @ColumnInfo(defaultValue = "'BUILT_IN'") val origin: String = "BUILT_IN",
+    val importedAt: Long? = null,
+    /** The original imported JSON object, kept verbatim so no imported data is lost. */
+    val sourceJson: String? = null,
 )
 
 @Serializable

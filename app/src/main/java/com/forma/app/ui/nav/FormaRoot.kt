@@ -60,6 +60,7 @@ import com.forma.app.ui.home.HomeScreen
 import com.forma.app.ui.progress.ProgressScreen
 import com.forma.app.ui.recipes.RecipeDetailScreen
 import com.forma.app.ui.recipes.RecipeEditorScreen
+import com.forma.app.ui.recipes.RecipeImportScreen
 import com.forma.app.ui.recipes.RecipesScreen
 import com.forma.app.ui.settings.ProfileEditScreen
 import com.forma.app.ui.settings.SettingsScreen
@@ -79,6 +80,7 @@ object Routes {
     const val TARGETS = "targets_edit"
     fun recipe(id: String) = "recipe/$id"
     fun newRecipe() = "recipe_edit"
+    const val IMPORT = "recipe_import"
     fun editRecipe(id: String) = "recipe_edit?id=$id"
     fun copyRecipe(id: String) = "recipe_edit?copy=$id"
     fun log(day: Long) = "log/$day"
@@ -136,6 +138,7 @@ fun FormaRoot(nav: NavHostController = rememberNavController()) {
                     ActivityAddScreen(nav, it.arguments!!.getLong("day"))
                 }
                 composable(Routes.CARRYOVER) { CarryoverScreen(nav) }
+                composable(Routes.IMPORT) { RecipeImportScreen(nav) }
                 composable(Routes.HEALTH) { HealthConnectScreen(nav) }
                 composable(Routes.PROFILE) { ProfileEditScreen(nav) }
                 composable(Routes.TARGETS) { TargetsEditScreen(nav) }

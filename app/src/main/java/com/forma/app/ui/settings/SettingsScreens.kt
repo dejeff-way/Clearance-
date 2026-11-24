@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FileDownload
@@ -158,6 +159,9 @@ fun SettingsScreen(nav: NavController) {
                 { exportJson.launch("forma-backup-${LocalDate.now()}.json") })
             Hairline()
             ListRow("Restore from backup", "Replaces current data with a FORMA backup", Icons.Outlined.Restore, { importJson.launch(arrayOf("application/json", "*/*")) })
+            Hairline()
+            ListRow("Import & export recipes", "forma.recipe JSON files, pasted data or recipe text", Icons.AutoMirrored.Outlined.MenuBook,
+                { nav.navigate(Routes.IMPORT) })
             Hairline()
             ListRow("Export daily history (CSV)", "Intake, expenditure, deficit and weight per day", Icons.Outlined.TableChart,
                 { exportCsv.launch("forma-history-${LocalDate.now()}.csv") })

@@ -50,6 +50,7 @@ class AppContainer(
     val workouts = WorkoutRepository(db, time)
     val healthSyncer = HealthSyncer(db, healthSource, time)
     val backup = BackupManager(context, db)
+    val recipeImporter = com.forma.app.data.importer.RecipeImporter(context, db, time)
 
     private val ticker: Flow<Pair<java.time.LocalDate, Double>> = flow {
         while (true) {

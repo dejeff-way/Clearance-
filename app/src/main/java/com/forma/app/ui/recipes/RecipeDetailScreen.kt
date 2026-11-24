@@ -195,7 +195,14 @@ fun RecipeDetailScreen(nav: NavController, id: String) {
                 Spacer(Modifier.height(Space.m))
                 Text(r.name, style = Forma.type.title, color = c.text)
                 Spacer(Modifier.height(Space.xs))
-                Text(r.summary, style = Forma.type.body, color = c.textSecondary)
+                if (r.summary.isNotBlank()) Text(r.summary, style = Forma.type.body, color = c.textSecondary)
+                if (r.tags.isNotEmpty() || r.origin == "IMPORT") {
+                    Spacer(Modifier.height(Space.s))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                        if (r.origin == "IMPORT") Tag("Imported")
+                        r.tags.forEach { Tag(it) }
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                     if (r.builtIn) {
                         TextAction("Copy & edit", { nav.navigate(com.forma.app.ui.nav.Routes.copyRecipe(r.id)) }, modifier = Modifier.testTag("copy_recipe"))
@@ -224,8 +231,16 @@ fun RecipeDetailScreen(nav: NavController, id: String) {
                         StatBlock("Carbs", Fmt.grams(macros.carbsG), "g", Modifier.weight(1.2f))
                         StatBlock("Fat", Fmt.grams(macros.fatG), "g", Modifier.weight(1f))
                     }
+                    r.fiberG?.let { fiber ->
+                        val std = f.macros(Portion.STANDARD).kcal
+                        Spacer(Modifier.height(Space.m))
+                        StatBlock("Fiber", Fmt.grams(if (std > 0) fiber * macros.kcal / std else fiber), "g")
+                    }
                     Spacer(Modifier.height(Space.m))
-                    Text("Estimated from the ingredients below. Verify against your exact product labels and weighed portions.",
+                    Text(if (r.nutritionSource == "VERIFIED_LABELS") "Calculated from verified product labels." +
+                        (if (r.servings > 1) " Per serving (the batch makes ${r.servings})." else "")
+                        else "Estimated from the ingredients. Verify against your exact product labels and weighed portions." +
+                        (if (r.servings > 1) " Per serving (the batch makes ${r.servings})." else ""),
                         style = Forma.type.caption, color = c.textTertiary, modifier = Modifier.testTag("nutrition_kcal_${macros.kcal.roundToInt()}"))
                 }
                 if (r.referenceKcal != null && portion == Portion.STANDARD) {
@@ -269,13 +284,20 @@ fun RecipeDetailScreen(nav: NavController, id: String) {
                     }
                 }
 
-                SectionHeader("Preparation")
-                Steps(r.prepSteps)
-                SectionHeader("Cooking")
+                if (r.prepSteps.isNotEmpty()) {
+                    SectionHeader("Preparation")
+                    Steps(r.prepSteps)
+                    SectionHeader("Cooking")
+                } else SectionHeader("Method")
                 Steps(r.cookSteps)
+                if (r.storageNotes.isNotEmpty()) {
+                    SectionHeader("Storage")
+                    FormaCard { r.storageNotes.forEachIndexed { i, n -> if (i > 0) Spacer(Modifier.height(Space.s)); Bullet(n) } }
+                }
 
                 SectionHeader("Kosher notes")
-                FormaCard { r.kosherNotes.forEachIndexed { i, n -> if (i > 0) Spacer(Modifier.height(Space.s)); Bullet(n) } }
+                if (r.kosherNotes.isEmpty()) Note("No kosher certification or sourcing notes. Don't assume ingredients are kosher — check each product's hechsher.", Tone.WARN)
+                else FormaCard { r.kosherNotes.forEachIndexed { i, n -> if (i > 0) Spacer(Modifier.height(Space.s)); Bullet(n) } }
                 if (r.safetyNotes.isNotEmpty()) {
                     SectionHeader("Food safety")
                     FormaCard { r.safetyNotes.forEachIndexed { i, n -> if (i > 0) Spacer(Modifier.height(Space.s)); Bullet(n) } }
