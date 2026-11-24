@@ -24,6 +24,11 @@ class SettingsStore(private val context: Context) {
     private val themeKey = stringPreferencesKey("theme")
     private val weightKey = stringPreferencesKey("weight_unit")
     private val lengthKey = stringPreferencesKey("length_unit")
+    private val recipeSortKey = stringPreferencesKey("recipe_sort")
+
+    /** Remembered recipe sort, encoded as "KEY:asc|desc". */
+    val recipeSort: Flow<String?> = context.dataStore.data.map { it[recipeSortKey] }
+    suspend fun setRecipeSort(v: String) = context.dataStore.edit { it[recipeSortKey] = v }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
         AppSettings(

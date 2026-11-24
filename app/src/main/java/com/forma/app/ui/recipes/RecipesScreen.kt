@@ -93,6 +93,10 @@ fun RecipesScreen(nav: NavController) {
     val all by vm.recipes.collectAsStateWithLifecycle()
     var filter by rememberSaveable { mutableStateOf(Filter.BREAKFAST) }
     var query by rememberSaveable { mutableStateOf("") }
+    val container = com.forma.app.ui.LocalContainer.current
+    val sortScope = androidx.compose.runtime.rememberCoroutineScope()
+    val sortPref by container.settings.recipeSort.collectAsStateWithLifecycle(null)
+    val sort = RecipeSort.decode(sortPref)
     val c = Forma.colors
     val shown = all.filter {
         (when (filter) {
@@ -101,7 +105,7 @@ fun RecipesScreen(nav: NavController) {
             else -> it.recipe.category == filter.cat!!.name
         }) &&
             (query.isBlank() || it.recipe.name.contains(query, true) || it.recipe.summary.contains(query, true) || it.recipe.tags.any { t -> t.contains(query.trim().replace(' ', '-'), true) })
-    }
+    }.sortedByRecipeSort(sort)
     LazyColumn(
         Modifier.fillMaxSize().statusBarsPadding().testTag("recipes"),
         contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, bottom = Space.xxl),
@@ -121,6 +125,7 @@ fun RecipesScreen(nav: NavController) {
             ) {
                 Filter.entries.forEach { f -> Chip(f.label, f == filter, { filter = f }, Modifier.testTag("filter_${f.name}")) }
             }
+            SortRow(sort, { sortScope.launch { container.settings.setRecipeSort(it.encode()) } })
         }
         if (shown.isEmpty()) item {
             Text(when {

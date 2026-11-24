@@ -16,3 +16,8 @@ fun androidx.compose.ui.test.SemanticsNodeInteraction.performTextClearanceAndInp
     performTextClearance()
     performTextInput(text)
 }
+
+fun hasTestTagPrefix(prefix: String) = androidx.compose.ui.test.SemanticsMatcher("TestTag starts with $prefix") { node ->
+    val tag = node.config.getOrElseNullable(androidx.compose.ui.semantics.SemanticsProperties.TestTag) { null }
+    tag != null && tag.startsWith(prefix) && tag != "recipe_detail"
+}

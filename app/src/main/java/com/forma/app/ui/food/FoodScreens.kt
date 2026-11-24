@@ -68,6 +68,7 @@ import com.forma.app.ui.nav.Routes
 import com.forma.app.ui.recipes.AddRecipeSheet
 import com.forma.app.ui.recipes.RecipeRow
 import com.forma.app.ui.recipes.RecipesViewModel
+import com.forma.app.ui.recipes.sortedByRecipeSort
 import com.forma.app.ui.theme.Forma
 import com.forma.app.ui.theme.Space
 import com.forma.app.util.Fmt
@@ -296,15 +297,22 @@ fun AddFoodScreen(nav: NavController, epochDay: Long, mealArg: String?) {
         Spacer(Modifier.height(Space.m))
         when (tab) {
             AddTab.LIBRARY -> {
-                val shown = recipes.filter { query.isBlank() || it.recipe.name.contains(query, true) }
-                    .sortedWith(compareByDescending<com.forma.app.ui.recipes.RecipeCardData> { it.recipe.isFavorite }
+                val sortPref by container.settings.recipeSort.collectAsStateWithLifecycle(null)
+                val sort = com.forma.app.ui.recipes.RecipeSort.decode(sortPref)
+                val filtered = recipes.filter { query.isBlank() || it.recipe.name.contains(query, true) }
+                // Recommended: saved first, then this meal's collection. Any other sort applies to the whole list.
+                val shown = if (sort.key == com.forma.app.ui.recipes.RecipeSortKey.RECOMMENDED)
+                    filtered.sortedWith(compareByDescending<com.forma.app.ui.recipes.RecipeCardData> { it.recipe.isFavorite }
                         .thenBy { if (it.recipe.category == meal.name) 0 else 1 }.thenBy { it.recipe.sortOrder })
+                else filtered.sortedByRecipeSort(sort)
                 LazyColumn(contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, bottom = Space.xxl),
                     verticalArrangement = Arrangement.spacedBy(Space.s)) {
                     item {
                         FormaField(query, { query = it }, "Search recipes")
                         Spacer(Modifier.height(Space.xs))
-                        Text("Saved recipes first, then ${meal.label.lowercase()} suggestions.", style = Forma.type.caption, color = c.textTertiary)
+                        com.forma.app.ui.recipes.SortRow(sort, { scope.launch { container.settings.setRecipeSort(it.encode()) } })
+                        if (sort.key == com.forma.app.ui.recipes.RecipeSortKey.RECOMMENDED)
+                            Text("Saved recipes first, then ${meal.label.lowercase()} suggestions.", style = Forma.type.caption, color = c.textTertiary)
                     }
                     items(shown, key = { it.recipe.id }) { d ->
                         RecipeRow(d, onClick = {
