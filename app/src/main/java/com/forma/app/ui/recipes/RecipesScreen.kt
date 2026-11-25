@@ -67,14 +67,14 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-data class RecipeCardData(val recipe: RecipeEntity, val macros: Macros)
+data class RecipeCardData(val recipe: RecipeEntity, val macros: Macros, val largeKcal: Double? = null)
 
 class RecipesViewModel(private val c: AppContainer) : ViewModel() {
     val recipes = combine(c.recipes.recipes, c.recipes.allIngredients) { rs, ings ->
         val byId = ings.groupBy { it.recipeId }
         rs.map { r ->
             val milk = if (r.usesMilkChoice) MilkOption.from(r.selectedMilk) ?: MilkOption.from(r.defaultMilk) else null
-            RecipeCardData(r, RecipeMath.macros(byId[r.id].orEmpty(), Portion.STANDARD, 1.0, milk))
+            RecipeCardData(r, RecipeMath.macros(byId[r.id].orEmpty(), Portion.STANDARD, 1.0, milk), RecipeMath.macros(byId[r.id].orEmpty(), Portion.LARGE, 1.0, milk).kcal)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -113,6 +113,7 @@ fun RecipesScreen(nav: NavController) {
     ) {
         item {
             ScreenTitle("Recipes", subtitle = "${all.size} kosher recipes") {
+                com.forma.app.ui.components.TextAction("Plan", { nav.navigate(Routes.MEAL_PLAN) }, modifier = Modifier.testTag("open_meal_plan"))
                 com.forma.app.ui.components.TextAction("Import", { nav.navigate(Routes.IMPORT) }, color = Forma.colors.textSecondary, modifier = Modifier.testTag("import_recipes"))
                 com.forma.app.ui.components.TextAction("+ New", { nav.navigate(Routes.newRecipe()) }, modifier = Modifier.testTag("new_recipe"))
             }

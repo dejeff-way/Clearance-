@@ -52,6 +52,7 @@ class AppContainer(
     val backup = BackupManager(context, db)
     val recipeImporter = com.forma.app.data.importer.RecipeImporter(context, db, time)
     val library = com.forma.app.data.workout.WorkoutLibraryRepository(db, time)
+    val mealPlan = com.forma.app.data.plan.MealPlanRepository(db, recipes, food, time)
     val workoutImporter = com.forma.app.data.workout.WorkoutImporter(db, time)
 
     /** "Do this workout today" choice (date, workout id). Doesn't change the schedule. */

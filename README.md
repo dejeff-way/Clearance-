@@ -33,6 +33,15 @@ Recipes tab → **+ New**, or open any built-in recipe → **Copy & edit** (buil
 collection and under **My recipes**, can be edited or deleted, and are included in backups. A warning appears if a Meat recipe has an
 ingredient that looks like dairy (or vice versa).
 
+## Meal plan & shopping list
+Recipes → **Plan** opens a Sunday–Saturday plan. It shows next week from Thursday onwards.
+- **Filling the plan:** add any recipe to any meal, standard or large. Blank days and meals are fine. **Meal prep** ("cook once · N days") fills the same meal on the following days and shows a cook-day schedule. Each day shows planned calories and protein against your target. Copy last week and Clear week are available.
+- **Shopping list:** combines every ingredient across the week for one person, grouped by store section, with check-off and text sharing.
+  - Meat and fish show grams and pounds. Cooked-weight recipes are converted to the raw amount to buy, and cooked rice to dry rice.
+  - Produce shows what you'd buy: tomatoes, onions, lemons, bunches of herbs.
+  - Pantry staples sit in a "check you have" section, and "always have" hides them.
+- **Logging:** planned meals appear on Home as **Today's plan** with one-tap Log. Nothing is logged automatically.
+
 ## Importing recipes
 Recipes → **Import** accepts `forma.recipe` v1 JSON (as a file or pasted) or plain recipe text, for one recipe or hundreds at a time.
 Every recipe is validated and previewed first:
@@ -101,7 +110,7 @@ All read-only; FORMA never writes to Health Connect.
 
 History beyond 30 days is not requested (`READ_HEALTH_DATA_HISTORY` is not used). The manifest also includes the privacy-rationale activity Health Connect requires. WorkManager adds its standard `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE` and `ACCESS_NETWORK_STATE` declarations; FORMA makes no network requests.
 
-## Tested (162 automated tests, all passing)
+## Tested (167 automated tests, all passing)
 - **Engine (43):** BMR ≈ 2,265 for the default profile; HC-total, HC-active and estimate modes; partial-day projection; rejecting incomplete totals; steps vs sessions (no double count); overlap de-duplication; budget minimum and warnings; fixed mode; remaining vs deficit; carryover 300 → 200 + 100, minimum-limited repayment, multiple overages, edit/cancel; trend smoothing, 14-day recommendation logic; progression; ingredient scaling.
 - **Data layer (20, Robolectric + Room):** 17 recipes in 4 collections, no desserts, Creami under Snacks; no dairy in meat recipes; raw-fish warnings; portion scaling; milk choice changes nutrition; favourites survive re-seed; log/edit portion/delete updates the summary; calories-only manual entry; workouts raise estimated (not measured) expenditure; carryover affects budget only; weight → BMR; set logging, completion, remembered substitutions; substitutions stay in the same movement pattern; **persistence after closing and reopening the database file**; backup round-trip.
 - **Health Connect sync (9, fake data source):** import; re-sync creates no duplicates; deletions propagate; manual weights untouched; only granted types stored; permission-denied, unavailable and revoked-mid-read states; synced total drives the budget.

@@ -122,9 +122,9 @@ fun BackBar(title: String, onBack: () -> Unit, trailing: @Composable RowScope.()
 }
 
 @Composable
-fun IconAction(icon: ImageVector, description: String, onClick: () -> Unit, tint: Color = Forma.colors.text, size: Dp = 44.dp) {
+fun IconAction(icon: ImageVector, description: String, onClick: () -> Unit, tint: Color = Forma.colors.text, size: Dp = 44.dp, modifier: Modifier = Modifier) {
     Box(
-        Modifier.size(size).clip(CircleShape).clickable(role = Role.Button, onClick = onClick)
+        modifier.size(size).clip(CircleShape).clickable(role = Role.Button, onClick = onClick)
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) { Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp)) }

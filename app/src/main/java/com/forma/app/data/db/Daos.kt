@@ -187,3 +187,26 @@ interface WorkoutLibraryDao {
     @Query("SELECT * FROM active_program WHERE id = 1") suspend fun active(): ActiveProgramEntity?
     @Upsert suspend fun setActive(a: ActiveProgramEntity)
 }
+
+@Dao
+interface MealPlanDao {
+    @Query("SELECT * FROM meal_plan WHERE epochDay BETWEEN :from AND :to ORDER BY epochDay, id") fun observeRange(from: Long, to: Long): Flow<List<MealPlanEntity>>
+    @Query("SELECT * FROM meal_plan WHERE epochDay BETWEEN :from AND :to ORDER BY epochDay, id") suspend fun range(from: Long, to: Long): List<MealPlanEntity>
+    @Query("SELECT * FROM meal_plan WHERE id = :id") suspend fun get(id: Long): MealPlanEntity?
+    @Query("SELECT * FROM meal_plan WHERE batchId = :batchId ORDER BY epochDay") suspend fun batch(batchId: String): List<MealPlanEntity>
+    @Insert suspend fun insert(e: MealPlanEntity): Long
+    @Insert suspend fun insertAll(e: List<MealPlanEntity>)
+    @Update suspend fun update(e: MealPlanEntity)
+    @Query("DELETE FROM meal_plan WHERE id = :id") suspend fun delete(id: Long)
+    @Query("DELETE FROM meal_plan WHERE batchId = :batchId") suspend fun deleteBatch(batchId: String)
+    @Query("DELETE FROM meal_plan WHERE epochDay BETWEEN :from AND :to") suspend fun deleteRange(from: Long, to: Long)
+    @Query("SELECT * FROM meal_plan") suspend fun all(): List<MealPlanEntity>
+
+    @Query("SELECT * FROM shopping_checks WHERE weekStartEpochDay = :week") fun observeChecks(week: Long): Flow<List<ShoppingCheckEntity>>
+    @Upsert suspend fun upsertCheck(c: ShoppingCheckEntity)
+    @Query("DELETE FROM shopping_checks WHERE weekStartEpochDay = :week") suspend fun clearChecks(week: Long)
+
+    @Query("SELECT * FROM pantry_always ORDER BY label") fun observePantry(): Flow<List<PantryItemEntity>>
+    @Upsert suspend fun upsertPantry(p: PantryItemEntity)
+    @Query("DELETE FROM pantry_always WHERE itemKey = :key") suspend fun deletePantry(key: String)
+}

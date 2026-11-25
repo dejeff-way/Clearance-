@@ -13,9 +13,9 @@ import androidx.room.TypeConverters
         MeasurementEntity::class, WorkoutSessionEntity::class, ExerciseLogEntity::class, SetLogEntity::class,
         SubstitutionPrefEntity::class, SyncMetaEntity::class,
         ExerciseEntity::class, WorkoutEntity::class, WorkoutSlotEntity::class, ProgramEntity::class, ProgramDayEntity::class,
-        ActiveProgramEntity::class,
+        ActiveProgramEntity::class, MealPlanEntity::class, ShoppingCheckEntity::class, PantryItemEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -30,8 +30,19 @@ abstract class FormaDatabase : RoomDatabase() {
     abstract fun workouts(): WorkoutDao
     abstract fun syncMeta(): SyncMetaDao
     abstract fun library(): WorkoutLibraryDao
+    abstract fun mealPlan(): MealPlanDao
 
     companion object {
+        /** v5 → v6: weekly meal plan, shopping-list checkmarks and "always have" pantry items. */
+        val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `meal_plan` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `epochDay` INTEGER NOT NULL, `mealType` TEXT NOT NULL, `recipeId` TEXT NOT NULL, `portion` TEXT NOT NULL, `servings` REAL NOT NULL, `batchId` TEXT, `isPrepDay` INTEGER NOT NULL, `loggedFoodId` INTEGER, `createdAt` INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_meal_plan_epochDay` ON `meal_plan` (`epochDay`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_meal_plan_batchId` ON `meal_plan` (`batchId`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `shopping_checks` (`weekStartEpochDay` INTEGER NOT NULL, `itemKey` TEXT NOT NULL, `checked` INTEGER NOT NULL, PRIMARY KEY(`weekStartEpochDay`, `itemKey`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `pantry_always` (`itemKey` TEXT NOT NULL, `label` TEXT NOT NULL, PRIMARY KEY(`itemKey`))")
+            }
+        }
         /** v4 → v5: pause/resume for workouts. */
         val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
@@ -102,7 +113,7 @@ abstract class FormaDatabase : RoomDatabase() {
         fun create(context: Context, inMemory: Boolean = false): FormaDatabase {
             val b = if (inMemory) Room.inMemoryDatabaseBuilder(context, FormaDatabase::class.java)
             else Room.databaseBuilder(context, FormaDatabase::class.java, "forma.db")
-            return b.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
+            return b.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build()
         }
     }
 }

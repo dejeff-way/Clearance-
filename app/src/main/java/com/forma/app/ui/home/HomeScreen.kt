@@ -166,6 +166,9 @@ fun HomeScreen(nav: NavController) {
         SectionHeader("Activity & health", action = "Trends", onAction = { nav.navigate(Routes.PROGRESS) })
         ActivityGrid(s.model, s.sync, s.settings) { m -> nav.navigate(Routes.metric(m.name)) }
 
+        // ── Today's plan (suggestions; never logged automatically) ──
+        TodayPlanCard(s.today, s.meals.map { it.id }.toSet(), onOpenPlan = { nav.navigate(Routes.MEAL_PLAN) })
+
         // ── Today's meals ────────────────────────────────────────
         SectionHeader("Today's meals", action = "Food log", onAction = { nav.navigate(Routes.log(day)) })
         FormaCard(padding = androidx.compose.foundation.layout.PaddingValues(horizontal = Space.l, vertical = Space.s)) {

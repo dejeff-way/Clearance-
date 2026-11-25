@@ -41,6 +41,8 @@ data class BackupFile(
     val substitutions: List<SubstitutionPrefEntity>,
     val customRecipes: List<com.forma.app.data.db.RecipeEntity> = emptyList(),
     val customIngredients: List<com.forma.app.data.db.IngredientEntity> = emptyList(),
+    val mealPlan: List<com.forma.app.data.db.MealPlanEntity> = emptyList(),
+    val pantryAlways: List<com.forma.app.data.db.PantryItemEntity> = emptyList(),
 )
 
 class BackupManager(private val context: Context, private val db: FormaDatabase) {
@@ -62,6 +64,7 @@ class BackupManager(private val context: Context, private val db: FormaDatabase)
         substitutions = db.workouts().allPrefs(),
         customRecipes = db.recipes().all().filter { !it.builtIn },
         customIngredients = db.recipes().all().filter { !it.builtIn }.flatMap { db.recipes().ingredients(it.id) },
+        mealPlan = db.mealPlan().all(),
     )
 
     fun encode(b: BackupFile): String = json.encodeToString(BackupFile.serializer(), b)
@@ -102,6 +105,9 @@ class BackupManager(private val context: Context, private val db: FormaDatabase)
         b.setLogs.forEach { db.workouts().insertSetLog(it) }
         b.substitutions.forEach { db.workouts().upsertPref(it) }
         db.recipes().all().filter { !it.builtIn }.forEach { db.recipes().deleteCustom(it.id) }
+        db.openHelper.writableDatabase.execSQL("DELETE FROM meal_plan")
+        db.mealPlan().insertAll(b.mealPlan.map { it.copy(loggedFoodId = null) })
+        b.pantryAlways.forEach { db.mealPlan().upsertPantry(it) }
         b.customRecipes.forEach { r -> db.recipes().replaceRecipe(r.copy(photoUri = null), b.customIngredients.filter { it.recipeId == r.id }) }
     }
 
@@ -126,7 +132,7 @@ class BackupManager(private val context: Context, private val db: FormaDatabase)
     suspend fun resetAll() = db.withTransaction {
         db.openHelper.writableDatabase.apply {
             listOf("food_log", "daily_energy", "exercise_sessions", "carryover", "weights", "measurements",
-                "workout_sessions", "exercise_logs", "set_logs", "substitution_prefs", "sync_meta", "profile")
+                "workout_sessions", "exercise_logs", "set_logs", "substitution_prefs", "sync_meta", "profile", "meal_plan", "shopping_checks", "pantry_always")
                 .forEach { execSQL("DELETE FROM $it") }
             execSQL("DELETE FROM recipe_ingredients WHERE recipeId IN (SELECT id FROM recipes WHERE builtIn = 0)")
             execSQL("DELETE FROM recipes WHERE builtIn = 0")
