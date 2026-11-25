@@ -159,6 +159,7 @@ class UiFlowTest {
 
     @Test fun `theme switch and targets persist`() {
         rule.onNodeWithTag("tab_settings").performClick()
+        waitFor { rule.onAllNodesWithTagExists("settings") && rule.onAllNodes(androidx.compose.ui.test.hasText("Dark")).fetchSemanticsNodes().size == 1 }
         rule.onNodeWithText("Dark").performClick()
         waitFor { runBlocking { c.settings.settings.first() }.theme.name == "DARK" }
         rule.onNodeWithText("Targets & budget").performClick()

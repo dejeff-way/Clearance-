@@ -55,6 +55,10 @@ class AppContainer(
     val mealPlan = com.forma.app.data.plan.MealPlanRepository(db, recipes, food, time)
     val workoutImporter = com.forma.app.data.workout.WorkoutImporter(db, time)
 
+    private val timerAlerts = com.forma.app.util.TimerAlerts(context)
+    /** Hold and rest timers for the workout in progress. */
+    val setTimers = com.forma.app.data.workout.SetTimerController(time, workouts, appScope) { timerAlerts.play(it) }
+
     /** "Do this workout today" choice (date, workout id). Doesn't change the schedule. */
     val workoutOverride = kotlinx.coroutines.flow.MutableStateFlow<Pair<java.time.LocalDate, String>?>(null)
 

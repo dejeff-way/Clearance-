@@ -48,6 +48,11 @@ import com.forma.app.data.workout.PlannedDay
 import com.forma.app.data.workout.ProgressionType
 import com.forma.app.data.workout.WorkoutCatalog
 import com.forma.app.data.workout.WorkoutDef
+import com.forma.app.data.workout.SetTimer
+import com.forma.app.data.workout.TimerAdvice
+import com.forma.app.data.workout.TimerKind
+import com.forma.app.data.workout.TimerTick
+import androidx.compose.material.icons.outlined.Timer
 import com.forma.app.di.AppContainer
 import com.forma.app.ui.components.CheckCircle
 import com.forma.app.ui.components.ConfirmDialog
@@ -230,13 +235,26 @@ class WorkoutViewModel(private val c: AppContainer) : ViewModel() {
     fun logSet(slot: String, idx: Int, w: Double?, reps: Int?, min: Double?) = viewModelScope.launch { c.workouts.logSet(sessionId(), slot, idx, w, reps, min) }
     fun notes(slot: String, n: String) = viewModelScope.launch { c.workouts.setExerciseNotes(sessionId(), slot, n) }
     fun sessionNotes(n: String) = viewModelScope.launch { c.workouts.setSessionNotes(sessionId(), n) }
-    fun finish(minutes: Int? = null) = viewModelScope.launch { c.workouts.finish(sessionId(), minutes) }
+    fun finish(minutes: Int? = null) = viewModelScope.launch { c.setTimers.cancel(); c.workouts.finish(sessionId(), minutes) }
     fun pause() = viewModelScope.launch { c.workouts.pause(sessionId()) }
     fun resume() = viewModelScope.launch { c.workouts.resume(sessionId()) }
     fun setDuration(minutes: Int) = viewModelScope.launch { runCatching { c.workouts.setDuration(sessionId(), minutes) } }
     fun now() = c.time.nowMillis()
+
+    val timer = c.setTimers.current
+    val tick = c.setTimers.tick
+    fun restFor(ss: SlotState) = TimerAdvice.recommendedRest(ss.slot.restSeconds, ss.kind, ss.exercise.tracksWeight, ss.slot.timed)
+    fun startHold(ss: SlotState, idx: Int, seconds: Int) = viewModelScope.launch {
+        c.setTimers.startHold(sessionId(), ss.slot.slotKey, ss.exercise.name, idx, ss.slot.sets, seconds, TimerAdvice.perSide(ss.slot.target), restFor(ss))
+    }
+    fun startRest(ss: SlotState, idx: Int) = viewModelScope.launch {
+        c.setTimers.startRest(sessionId(), ss.slot.slotKey, ss.exercise.name, idx, ss.slot.sets, restFor(ss))
+    }
+    fun stopTimer() = c.setTimers.stop()
+    fun cancelTimer() = c.setTimers.cancel()
+    fun adjustRest(d: Int) = c.setTimers.adjustRest(d)
     fun reopen() = viewModelScope.launch { c.workouts.reopen(sessionId()) }
-    fun discard(id: Long) = viewModelScope.launch { c.workouts.deleteSession(id) }
+    fun discard(id: Long) = viewModelScope.launch { c.setTimers.cancel(); c.workouts.deleteSession(id) }
 }
 
 @Composable
@@ -253,7 +271,16 @@ fun WorkoutScreen(nav: NavController) {
     val isToday = s.viewDate == s.today
     val w = s.workout
     val active = isToday && s.session != null
+    val timer by vm.timer.collectAsStateWithLifecycle()
+    val tick by vm.tick.collectAsStateWithLifecycle()
+    val view = androidx.compose.ui.platform.LocalView.current
+    // Keep the screen awake while a hold or rest is counting down
+    androidx.compose.runtime.DisposableEffect(timer != null) {
+        view.keepScreenOn = timer != null
+        onDispose { view.keepScreenOn = false }
+    }
 
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding()
             .padding(horizontal = Space.gutter).padding(bottom = Space.xxl).testTag("workout"),
@@ -324,7 +351,10 @@ fun WorkoutScreen(nav: NavController) {
                     onToggle = { vm.toggle(ss.slot.slotKey, !(ss.log?.completed ?: false)) },
                     onSwap = { swapFor = ss },
                     onSet = { idx, wt, r, m -> vm.logSet(ss.slot.slotKey, idx, wt, r, m) },
-                    onNotes = { vm.notes(ss.slot.slotKey, it) })
+                    onNotes = { vm.notes(ss.slot.slotKey, it) },
+                    timer = if (active) timer else null, restSeconds = vm.restFor(ss),
+                    onHold = { idx, secs -> vm.startHold(ss, idx, secs) },
+                    onRest = { idx -> vm.startRest(ss, idx) })
                 Spacer(Modifier.height(Space.m))
             }
             if (active) {
@@ -375,6 +405,13 @@ fun WorkoutScreen(nav: NavController) {
             }
             Text("Watch workouts from Health Connect are shown here but never change your schedule.", style = Forma.type.caption, color = c.textTertiary,
                 modifier = Modifier.padding(top = Space.xs))
+        }
+        if (timer != null) Spacer(Modifier.height(200.dp))
+    }
+        val t = timer; val k = tick
+        if (t != null && k != null && active) {
+            TimerPanel(t, k, onStop = { vm.stopTimer() }, onCancel = { vm.cancelTimer() }, onAdjust = { vm.adjustRest(it) },
+                modifier = Modifier.align(Alignment.BottomCenter))
         }
     }
 
@@ -468,6 +505,7 @@ private fun WeekStrip(week: List<WeekDayState>, today: LocalDate, selected: Loca
 private fun ExerciseCard(
     n: Int, ss: SlotState, active: Boolean, readOnly: Boolean, onToggle: () -> Unit, onSwap: () -> Unit,
     onSet: (Int, Double?, Int?, Double?) -> Unit, onNotes: (String) -> Unit,
+    timer: SetTimer? = null, restSeconds: Int = 0, onHold: (Int, Int) -> Unit = { _, _ -> }, onRest: (Int) -> Unit = {},
 ) {
     val c = Forma.colors
     var expanded by rememberSaveable(ss.slot.slotKey) { mutableStateOf(false) }
@@ -482,7 +520,9 @@ private fun ExerciseCard(
             Column(Modifier.weight(1f).padding(top = 10.dp).clickable { expanded = !expanded }) {
                 Text(ss.exercise.name, style = Forma.type.heading, color = if (done) c.textSecondary else c.text, modifier = Modifier.testTag("exname_$key"))
                 Text(
-                    "${if (ss.slot.sets > 1) "${ss.slot.sets} × " else ""}${ss.slot.target}" + (if (ss.slot.restSeconds > 0) " · rest ${restLabel(ss.slot.restSeconds)}" else ""),
+                    "${if (ss.slot.sets > 1) "${ss.slot.sets} × " else ""}${ss.slot.target}" +
+                        (if (ss.slot.restSeconds > 0) " · rest ${restLabel(ss.slot.restSeconds)}"
+                        else if (ss.slot.sets > 1 && restSeconds > 0) " · rest ${restLabel(restSeconds)} (recommended)" else ""),
                     style = Forma.type.bodySmall, color = c.textSecondary,
                 )
                 if (ss.substituted) Text("Substitute for ${ss.originalName}${if (ss.remembered) " · remembered" else ""}", style = Forma.type.caption, color = c.warn)
@@ -497,12 +537,12 @@ private fun ExerciseCard(
             ss.advice?.let { a -> Spacer(Modifier.height(Space.s)); Text(a.message, style = Forma.type.caption, color = c.accent) }
             if (ss.lastSets.isNotEmpty() && !readOnly) {
                 Text("Last (${ss.lastDate?.let { Fmt.shortDate(it) }}): " + ss.lastSets.joinToString("  ") { s ->
-                    if (s.durationMin != null) "${Fmt.amount(s.durationMin)} min" else "${s.weightLb?.let { Fmt.amount(it) + "×" } ?: ""}${s.reps ?: "–"}"
+                    if (s.durationMin != null) durLabel(s.durationMin) else "${s.weightLb?.let { Fmt.amount(it) + "×" } ?: ""}${s.reps ?: "–"}"
                 }, style = Forma.type.caption, color = c.textTertiary)
             }
             if (readOnly && ss.sets.isNotEmpty()) {
                 Text("Logged: " + ss.sets.joinToString("  ") { s ->
-                    if (s.durationMin != null) "${Fmt.amount(s.durationMin)} min" else "${s.weightLb?.let { Fmt.amount(it) + "×" } ?: ""}${s.reps ?: "–"}"
+                    if (s.durationMin != null) durLabel(s.durationMin) else "${s.weightLb?.let { Fmt.amount(it) + "×" } ?: ""}${s.reps ?: "–"}"
                 }, style = Forma.type.caption, color = c.textSecondary)
             }
             if (active) {
@@ -510,8 +550,13 @@ private fun ExerciseCard(
                 val tracksSets = ss.kind == ExerciseKind.STRENGTH || (ss.kind == ExerciseKind.CORE && ss.exercise.tracksWeight)
                 when {
                     ss.kind == ExerciseKind.CARDIO -> SetRow(ss, 0, onSet)
-                    ss.slot.timed || !tracksSets && ss.slot.repMin == null -> {}
-                    else -> (0 until ss.slot.sets).forEach { idx -> SetRow(ss, idx, onSet) }
+                    TimerAdvice.hasHoldTimer(ss.slot.timed, ss.kind, ss.slot.target) -> HoldSets(ss, timer, onHold)
+                    ss.slot.timed || !tracksSets && ss.slot.repMin == null ->
+                        if (ss.slot.sets > 1) RestOnly(ss, timer, onRest)
+                    else -> (0 until ss.slot.sets).forEach { idx ->
+                        SetRow(ss, idx, onSet, onRest = { onRest(idx) },
+                            resting = timer?.kind == TimerKind.REST && timer.slotKey == key && timer.setIndex == idx)
+                    }
                 }
                 AnimatedVisibility(expanded) {
                     var notes by remember(ss.log?.id) { mutableStateOf(ss.log?.notes ?: "") }
@@ -527,7 +572,7 @@ private fun ExerciseCard(
 }
 
 @Composable
-private fun SetRow(ss: SlotState, idx: Int, onSet: (Int, Double?, Int?, Double?) -> Unit) {
+private fun SetRow(ss: SlotState, idx: Int, onSet: (Int, Double?, Int?, Double?) -> Unit, onRest: (() -> Unit)? = null, resting: Boolean = false) {
     val c = Forma.colors
     val existing = ss.sets.firstOrNull { it.setIndex == idx }
     val last = ss.lastSets.firstOrNull { it.setIndex == idx }
@@ -549,7 +594,107 @@ private fun SetRow(ss: SlotState, idx: Int, onSet: (Int, Double?, Int?, Double?)
             }
             FormaField(r, { r = it; onSet(idx, w.toDoubleOrNull(), it.toIntOrNull(), null) }, "reps", Modifier.weight(1f).testTag("r_${tag}_$idx"),
                 numeric = true, decimal = false, placeholder = last?.reps?.toString())
+            if (onRest != null) {
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(50)).clickable(onClick = onRest).testTag("rest_${tag}_$idx"), contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.Timer, "Set done — start rest",
+                        tint = if (resting) c.accent else c.textSecondary, modifier = Modifier.size(22.dp))
+                }
+            }
         }
+    }
+}
+
+private fun durLabel(min: Double) = if (min < 1.0) "${Math.round(min * 60)} s" else if (min < 10 && Math.round(min * 60) % 60 != 0L) TimerAdvice.label(Math.round(min * 60).toInt()) else "${Fmt.amount(min)} min"
+
+/** Timed holds (planks, side holds, mobility): one Start per set, with a hold length you can nudge. */
+@Composable
+private fun HoldSets(ss: SlotState, timer: SetTimer?, onHold: (Int, Int) -> Unit) {
+    val c = Forma.colors
+    val key = ss.slot.slotKey
+    val range = TimerAdvice.holdRange(ss.slot.target)
+    val perSide = TimerAdvice.perSide(ss.slot.target)
+    val lastSec = ss.lastSets.mapNotNull { it.durationMin }.maxOrNull()?.let { Math.round(it * 60).toInt() }
+    var secs by rememberSaveable(key, ss.exercise.key) { mutableStateOf(TimerAdvice.defaultHold(ss.slot.target, lastSec)) }
+    val step = if ((range?.second ?: 60) > 120) 30 else 5
+    val busy = timer?.kind == TimerKind.HOLD
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("Hold", style = Forma.type.caption, color = c.textTertiary, modifier = Modifier.width(44.dp))
+        TextAction("−", { secs = (secs - step).coerceAtLeast(5) }, color = c.textSecondary, modifier = Modifier.testTag("hold_minus_$key"))
+        Text(TimerAdvice.label(secs) + if (perSide) " each side" else "", style = Forma.type.number, color = c.text, modifier = Modifier.testTag("hold_len_$key"))
+        TextAction("+", { secs = (secs + step).coerceAtMost(600) }, color = c.textSecondary, modifier = Modifier.testTag("hold_plus_$key"))
+    }
+    val next = (0 until ss.slot.sets).firstOrNull { i -> ss.sets.none { it.setIndex == i && it.durationMin != null } }
+    (0 until ss.slot.sets).forEach { idx ->
+        val logged = ss.sets.firstOrNull { it.setIndex == idx }?.durationMin
+        val running = timer != null && timer.slotKey == key && timer.setIndex == idx
+        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Set ${idx + 1}", style = Forma.type.caption, color = c.textTertiary, modifier = Modifier.width(44.dp))
+            Text(
+                when {
+                    running && timer!!.kind == TimerKind.HOLD -> "Holding…"
+                    running && timer!!.kind == TimerKind.REST -> "✓ ${logged?.let(::durLabel) ?: ""} · resting"
+                    logged != null -> "✓ ${durLabel(logged)}"
+                    else -> "—"
+                },
+                style = Forma.type.body, color = if (logged != null) c.accent else c.textTertiary, modifier = Modifier.weight(1f).testTag("hold_done_${key}_$idx"),
+            )
+            if (!busy) TextAction(if (logged == null) "Start" else "Redo", { onHold(idx, secs) },
+                color = if (idx == next) c.accent else c.textSecondary, modifier = Modifier.testTag("hold_${key}_$idx"))
+        }
+    }
+}
+
+/** Untracked multi-set exercises still get a rest timer. */
+@Composable
+private fun RestOnly(ss: SlotState, timer: SetTimer?, onRest: (Int) -> Unit) {
+    val c = Forma.colors
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("Between sets", style = Forma.type.caption, color = c.textTertiary, modifier = Modifier.weight(1f))
+        if (timer == null) TextAction("Start rest", { onRest(0) }, modifier = Modifier.testTag("rest_${ss.slot.slotKey}_0"))
+    }
+}
+
+/** Pinned to the bottom of the workout screen while a hold or rest is running. */
+@Composable
+private fun TimerPanel(t: SetTimer, k: TimerTick, onStop: () -> Unit, onCancel: () -> Unit, onAdjust: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val c = Forma.colors
+    val secs = (k.remainingMs + 999) / 1000
+    val phase = k.phase
+    val hold = t.kind == TimerKind.HOLD
+    val holding = phase?.holding == true
+    val shape = RoundedCornerShape(topStart = Radius.l, topEnd = Radius.l)
+    Column(
+        modifier.fillMaxWidth().clip(shape).background(c.surface).border(1.dp, c.line, shape)
+            .padding(horizontal = Space.gutter, vertical = Space.m).testTag("set_timer"),
+    ) {
+        Text(
+            if (hold) "${t.exerciseName} · set ${t.setIndex + 1} of ${t.totalSets}"
+            else "Rest · " + if (t.isLastSet) "next exercise" else "then set ${t.setIndex + 2} of ${t.totalSets} — ${t.exerciseName}",
+            style = Forma.type.caption, color = c.textSecondary, maxLines = 1,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(phase?.label ?: "Done", style = Forma.type.heading, color = when { holding -> c.accent; hold -> c.warn; else -> c.text },
+                    modifier = Modifier.testTag("timer_phase"))
+                Text("%d:%02d".format(secs / 60, secs % 60), style = Forma.type.numberLarge.copy(fontSize = androidx.compose.ui.unit.TextUnit(44f, androidx.compose.ui.unit.TextUnitType.Sp)),
+                    color = c.text, modifier = Modifier.testTag("timer_remaining"))
+            }
+            if (hold) {
+                Column(horizontalAlignment = Alignment.End) {
+                    PrimaryButton(if (holding) "Done — save ${k.heldSeconds / maxOf(1, t.phases.count { it.holding })} s" else "Stop", onStop, Modifier.testTag("timer_stop"))
+                    TextAction("Cancel", onCancel, color = c.textTertiary, modifier = Modifier.testTag("timer_cancel"))
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
+                    TextAction("−15", { onAdjust(-15) }, color = c.textSecondary, modifier = Modifier.testTag("rest_minus"))
+                    TextAction("+15", { onAdjust(15) }, color = c.textSecondary, modifier = Modifier.testTag("rest_plus"))
+                    PrimaryButton("Skip", onCancel, Modifier.testTag("rest_skip"))
+                }
+            }
+        }
+        Spacer(Modifier.height(Space.s))
+        val len = (phase?.seconds ?: 1) * 1000f
+        ThinProgress(if (phase == null) 1f else (1f - k.remainingMs / len).coerceIn(0f, 1f))
     }
 }
 
