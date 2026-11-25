@@ -142,7 +142,13 @@ fun MetricHistoryScreen(nav: NavController, metricName: String) {
                         val avg = pts.mapIndexed { i, p -> ChartPoint(p.date, pts.filter { !it.date.isAfter(p.date) && it.date.isAfter(p.date.minusDays(7)) }.map { it.value }.average()) }
                         TrendChart(raw = pts, trend = avg, height = 190.dp)
                     }
-                    else -> ValueBars(daily, goal = if (metric == Metric.STEPS) m.s.profile.stepGoal.toDouble() else null)
+                    else -> ValueBars(daily, goal = when (metric) {
+                        Metric.STEPS -> m.s.profile.stepGoal.toDouble()
+                        Metric.PROTEIN -> m.s.profile.proteinTargetG.toDouble()
+                        Metric.CARBS -> m.macroTargets(today).carbs.targetG.toDouble()
+                        Metric.FAT -> m.macroTargets(today).fat.targetG.toDouble()
+                        else -> null
+                    })
                 }
                 Spacer(Modifier.height(Space.s))
                 Text(

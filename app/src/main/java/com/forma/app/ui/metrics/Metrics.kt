@@ -20,6 +20,9 @@ enum class Metric(val label: String, val chart: ChartKind, val hcType: HcDataTyp
     ACTIVE_KCAL("Active calories", ChartKind.BARS, null, true),
     EXPENDITURE("Calories burned (est.)", ChartKind.BARS, null),
     INTAKE("Calories eaten", ChartKind.BARS, null),
+    PROTEIN("Protein eaten", ChartKind.BARS, null),
+    CARBS("Carbs eaten", ChartKind.BARS, null),
+    FAT("Fat eaten", ChartKind.BARS, null),
     DEFICIT("Calorie deficit (est.)", ChartKind.BALANCE, null, true),
     HEART_RATE("Heart rate (daily avg)", ChartKind.LINE, HcDataType.HEART_RATE),
     RESTING_HR("Resting heart rate", ChartKind.LINE, HcDataType.RESTING_HEART_RATE, false),
@@ -32,6 +35,7 @@ enum class Metric(val label: String, val chart: ChartKind, val hcType: HcDataTyp
 
     fun unit(s: AppSettings): String = when (this) {
         STEPS -> "steps"; DISTANCE -> if (s.lengthUnit == LengthUnit.CM) "km" else "mi"; FLOORS -> "floors"; EXERCISE -> "min"
+        PROTEIN, CARBS, FAT -> "g"
         ACTIVE_KCAL, EXPENDITURE, INTAKE, DEFICIT -> "kcal"; HEART_RATE, RESTING_HR -> "bpm"; HRV -> "ms"; SLEEP -> "h"
         SPO2 -> "%"; RESP_RATE -> "br/min"; WEIGHT -> if (s.weightUnit.name == "KG") "kg" else "lb"; WORKOUTS -> "sessions"
     }
@@ -50,6 +54,9 @@ enum class Metric(val label: String, val chart: ChartKind, val hcType: HcDataTyp
         ACTIVE_KCAL -> "Calories above resting energy, as reported by your wearable (imported active calories, or measured total minus resting). Estimates, not exact measurements."
         EXPENDITURE -> "FORMA's estimate of total energy burned — measured by your wearable when available, otherwise estimated from your profile."
         INTAKE -> "Calories you logged. Days without food logged are left out."
+        PROTEIN -> "Protein you logged, against your daily target."
+        CARBS -> "Carbs you logged. Your target is whatever your calorie budget has left after protein and fat (unless you fixed it), so it changes with your budget. Entries without carb info count as zero."
+        FAT -> "Fat you logged. Your target is a share of the day's calorie budget (30% by default). Entries without fat info count as zero."
         DEFICIT -> "Estimated expenditure minus calories eaten, for days with food logged. Positive = deficit."
         HEART_RATE -> "Average of all heart-rate readings that day."
         RESTING_HR -> "Resting heart rate as reported by your device. A gradual decline usually reflects improving fitness."
@@ -78,6 +85,9 @@ object MetricValues {
             }
             Metric.EXPENDITURE -> if (d.isAfter(model.s.today)) null else model.summary(d).expenditure.let { if (it.dayComplete) it.projectedDayKcal else it.burnedSoFarKcal }
             Metric.INTAKE -> if (model.hasFood(d)) model.consumed(d).kcal else null
+            Metric.PROTEIN -> if (model.hasFood(d)) model.consumed(d).proteinG else null
+            Metric.CARBS -> if (model.hasFood(d)) model.consumed(d).carbsG ?: 0.0 else null
+            Metric.FAT -> if (model.hasFood(d)) model.consumed(d).fatG ?: 0.0 else null
             Metric.DEFICIT -> if (!model.hasFood(d)) null else model.summary(d).let { if (d == model.s.today) it.actualDeficitSoFar.toDouble() else it.projectedDeficit.toDouble() }
             Metric.HEART_RATE -> e?.avgHr
             Metric.RESTING_HR -> e?.restingHr

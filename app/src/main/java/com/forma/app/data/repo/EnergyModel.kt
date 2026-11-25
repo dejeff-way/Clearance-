@@ -106,6 +106,13 @@ class EnergyModel(val s: EnergySnapshot) {
 
     val today: DaySummary by lazy { summary(s.today) }
 
+    /** Protein, carb and fat targets for [day], scaled to that day's calorie budget. */
+    fun macroTargets(day: LocalDate, summary: DaySummary = summary(day)): com.forma.engine.MacroTargets =
+        com.forma.engine.MacroCalculator.targets(
+            summary.budget.finalBudget, s.profile.proteinTargetG, s.profile.fatPctOfBudget, s.profile.fatTargetG, s.profile.carbTargetG,
+            summary.consumed,
+        )
+
     /** Summaries for the [days] days ending today (oldest first). */
     fun history(days: Int): List<Pair<LocalDate, DaySummary>> =
         (days - 1 downTo 0).map { s.today.minusDays(it.toLong()) }.map { it to summary(it) }

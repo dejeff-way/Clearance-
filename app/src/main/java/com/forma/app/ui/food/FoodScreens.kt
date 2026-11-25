@@ -132,11 +132,6 @@ fun FoodLogScreen(nav: NavController, epochDay: Long) {
                         if (summary != null) StatBlock("Budget", Fmt.kcal(summary.budget.finalBudget), "kcal", Modifier.weight(1f), style = Forma.type.numberLarge)
                     }
                     Spacer(Modifier.height(Space.m))
-                    Row {
-                        StatBlock("Protein", "${entries.sumOf { it.proteinG }.roundToInt()}", "g", Modifier.weight(1f))
-                        StatBlock("Carbs", entries.mapNotNull { it.carbsG }.takeIf { it.isNotEmpty() }?.sum()?.roundToInt()?.toString() ?: "—", "g", Modifier.weight(1f))
-                        StatBlock("Fat", entries.mapNotNull { it.fatG }.takeIf { it.isNotEmpty() }?.sum()?.roundToInt()?.toString() ?: "—", "g", Modifier.weight(1f))
-                    }
                     if (summary != null) {
                         Spacer(Modifier.height(Space.m)); Hairline(); Spacer(Modifier.height(Space.s))
                         Text(
@@ -150,6 +145,10 @@ fun FoodLogScreen(nav: NavController, epochDay: Long) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
                     PrimaryButton("Add food", { nav.navigate(Routes.addFood(day)) }, Modifier.weight(1f).testTag("log_add_food"), icon = Icons.Outlined.Add)
                     SecondaryButton("Over budget?", { nav.navigate(Routes.CARRYOVER) }, Modifier.weight(1f))
+                }
+                if (summary != null && model != null) {
+                    Spacer(Modifier.height(Space.m))
+                    com.forma.app.ui.components.MacrosCard(model!!.macroTargets(date, summary), entries.count { it.carbsG == null || it.fatG == null })
                 }
                 SectionHeader("Chronological")
             }

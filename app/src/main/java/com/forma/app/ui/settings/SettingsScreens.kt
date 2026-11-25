@@ -344,6 +344,9 @@ fun TargetsEditScreen(nav: NavController) {
     var baseline by remember(p.id) { mutableStateOf(p.baselineActivityFactor) }
     var maint by remember(p.id) { mutableStateOf(p.maintenanceActivityFactor) }
     var stepGoal by remember(p.id) { mutableStateOf(p.stepGoal.toString()) }
+    var fatPct by remember(p.id) { mutableStateOf(p.fatPctOfBudget) }
+    var fatFixed by remember(p.id) { mutableStateOf(p.fatTargetG?.toString() ?: "") }
+    var carbFixed by remember(p.id) { mutableStateOf(p.carbTargetG?.toString() ?: "") }
     var adjPct by remember(p.id) { mutableStateOf(p.wearableAdjustmentPct) }
     var bonusCap by remember(p.id) { mutableStateOf(p.maxActivityBonusKcal) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -371,6 +374,18 @@ fun TargetsEditScreen(nav: NavController) {
             if (dVal != null && dVal > 1000) Note("A deficit above 1,000 kcal/day is aggressive and makes it harder to keep muscle.", Tone.WARN)
             Spacer(Modifier.height(Space.s))
             FormaField(protein, { protein = it }, "Protein target", suffix = "g/day", numeric = true, decimal = false, modifier = Modifier.testTag("protein_input"))
+
+            SectionHeader("Carbs & fat")
+            Text("Fat — share of your daily calorie budget", style = Forma.type.caption, color = c.textSecondary)
+            Spacer(Modifier.height(Space.s))
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                listOf(20, 25, 30, 35, 40).forEach { v -> Chip("$v%", fatPct == v && fatFixed.isBlank(), { fatPct = v; fatFixed = "" }, Modifier.testTag("fat_pct_$v")) }
+            }
+            Spacer(Modifier.height(Space.s))
+            FormaField(fatFixed, { fatFixed = it }, "Or a fixed fat target (optional)", suffix = "g/day", numeric = true, decimal = false, modifier = Modifier.testTag("fat_fixed_input"))
+            Spacer(Modifier.height(Space.s))
+            FormaField(carbFixed, { carbFixed = it }, "Fixed carb target (optional)", suffix = "g/day", numeric = true, decimal = false, modifier = Modifier.testTag("carb_fixed_input"),
+                supporting = "Leave blank and carbs fill whatever your budget has left after protein and fat — so they rise on active days.")
 
             SectionHeader("Safeguards")
             FormaField(minimum, { minimum = it }, "Minimum calorie budget", suffix = "kcal", numeric = true, decimal = false,
@@ -424,6 +439,9 @@ fun TargetsEditScreen(nav: NavController) {
                     Text("Preview for today", style = Forma.type.caption, color = c.textSecondary)
                     ValueRow("Projected expenditure", "${Fmt.kcal(exp.projectedDayKcal)} kcal")
                     ValueRow("Budget", "${Fmt.kcal(b.finalBudget)} kcal", valueColor = c.accent)
+                    val mt = com.forma.engine.MacroCalculator.targets(b.finalBudget, protein.toIntOrNull() ?: p.proteinTargetG, fatPct,
+                        fatFixed.toIntOrNull(), carbFixed.toIntOrNull(), com.forma.engine.Macros.ZERO)
+                    ValueRow("Protein · carbs · fat", "${mt.protein.targetG} · ${mt.carbs.targetG} · ${mt.fat.targetG} g")
                     b.warnings.forEach { Text(it, style = Forma.type.caption, color = c.warn) }
                 }
             }
@@ -437,13 +455,16 @@ fun TargetsEditScreen(nav: NavController) {
                     mn == null || mn !in 1200..5000 -> error = "Minimum budget must be between 1,200 and 5,000 kcal"
                     r == null || r !in 0..500 -> error = "Repayment must be between 0 and 500 kcal/day"
                     stepGoal.toIntOrNull() == null || stepGoal.toInt() !in 1000..50000 -> error = "Step goal must be between 1,000 and 50,000"
+                    fatFixed.isNotBlank() && fatFixed.toIntOrNull() !in 30..250 -> error = "Fixed fat must be between 30 and 250 g"
+                    carbFixed.isNotBlank() && carbFixed.toIntOrNull() !in 20..600 -> error = "Fixed carbs must be between 20 and 600 g"
                     mode == BudgetMode.FIXED && (fx == null || fx !in 1200..6000) -> error = "Fixed target must be between 1,200 and 6,000 kcal"
                     else -> scope.launch {
                         container.profile.update {
                             it.copy(budgetMode = mode.name, fixedBudgetKcal = if (mode == BudgetMode.FIXED) fx else it.fixedBudgetKcal,
                                 desiredDeficitKcal = d, proteinTargetG = pr, minimumBudgetKcal = mn, maxRepaymentPerDay = r,
                                 baselineActivityFactor = baseline, maintenanceActivityFactor = maint,
-                                stepGoal = stepGoal.toInt(), wearableAdjustmentPct = adjPct, maxActivityBonusKcal = bonusCap)
+                                stepGoal = stepGoal.toInt(), wearableAdjustmentPct = adjPct, maxActivityBonusKcal = bonusCap,
+                                fatPctOfBudget = fatPct, fatTargetG = fatFixed.toIntOrNull(), carbTargetG = carbFixed.toIntOrNull())
                         }
                         nav.popOnMain()
                     }

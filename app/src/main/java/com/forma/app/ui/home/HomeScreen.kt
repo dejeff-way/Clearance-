@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.forma.app.data.seed.Category
 import com.forma.app.ui.components.CalorieRing
+import com.forma.app.ui.components.MacrosCard
 import com.forma.app.ui.components.FormaCard
 import com.forma.app.ui.components.Hairline
 import com.forma.app.ui.components.Note
@@ -143,24 +144,10 @@ fun HomeScreen(nav: NavController) {
             SecondaryButton("Log weight", { weightSheet = true }, Modifier.weight(1f).testTag("log_weight"), icon = Icons.Outlined.MonitorWeight)
         }
 
-        // ── Protein ──────────────────────────────────────────────
+        // ── Macros ───────────────────────────────────────────────
         Spacer(Modifier.height(Space.m))
-        FormaCard {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Column(Modifier.weight(1f)) {
-                    Overline("Protein")
-                    Spacer(Modifier.height(Space.xs))
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text("${sum.consumed.proteinG.roundToInt()}", style = Forma.type.numberLarge, color = c.text)
-                        Text(" / ${sum.proteinTargetG} g", style = Forma.type.bodySmall, color = c.textTertiary, modifier = Modifier.padding(bottom = 3.dp))
-                    }
-                }
-                Text(if (sum.proteinRemainingG > 0) "${sum.proteinRemainingG} g to go" else "Target reached",
-                    style = Forma.type.label, color = if (sum.proteinRemainingG > 0) c.textSecondary else c.accent)
-            }
-            Spacer(Modifier.height(Space.m))
-            ThinProgress((sum.consumed.proteinG / sum.proteinTargetG).toFloat())
-        }
+        MacrosCard(s.model.macroTargets(s.today, sum), s.meals.count { it.carbsG == null || it.fatG == null },
+            onClick = { nav.navigate(Routes.log(day)) })
 
         // ── Activity & health (live from Health Connect) ─────────
         SectionHeader("Activity & health", action = "Trends", onAction = { nav.navigate(Routes.PROGRESS) })

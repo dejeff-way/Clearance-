@@ -40,6 +40,13 @@ data class ProfileEntity(
     @ColumnInfo(defaultValue = "0") val wearableAdjustmentPct: Int = 0,
     /** Max kcal that activity may add to the food budget above the sedentary-baseline budget. 0 = no cap. */
     @ColumnInfo(defaultValue = "500") val maxActivityBonusKcal: Int = 500,
+    // ── v7 (carb & fat targets) ──
+    /** Fat target as a share of the day's calorie budget. */
+    @ColumnInfo(defaultValue = "30") val fatPctOfBudget: Int = 30,
+    /** Fixed fat target in grams; overrides [fatPctOfBudget] when set. */
+    val fatTargetG: Int? = null,
+    /** Fixed carb target in grams; when null, carbs are the rest of the budget. */
+    val carbTargetG: Int? = null,
     val updatedAt: Long = System.currentTimeMillis(),
 )
 

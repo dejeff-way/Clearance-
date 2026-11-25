@@ -186,7 +186,7 @@ class MealPlanTest {
         sql.execSQL("INSERT INTO food_log (epochDay,eatenAt,createdAt,mealType,name,servings,kcal,proteinG) VALUES (20000,1,1,'LUNCH','Kept',1.0,450,30)")
         sql.version = 5; sql.close()
         val db = androidx.room.Room.databaseBuilder(ctx, FormaDatabase::class.java, "migrate6.db")
-            .addMigrations(FormaDatabase.MIGRATION_1_2, FormaDatabase.MIGRATION_2_3, FormaDatabase.MIGRATION_3_4, FormaDatabase.MIGRATION_4_5, FormaDatabase.MIGRATION_5_6).build()
+            .addMigrations(FormaDatabase.MIGRATION_1_2, FormaDatabase.MIGRATION_2_3, FormaDatabase.MIGRATION_3_4, FormaDatabase.MIGRATION_4_5, FormaDatabase.MIGRATION_5_6, FormaDatabase.MIGRATION_6_7).build()
         runBlocking {
             assertEquals("Kept", db.food().all().single().name)
             assertTrue(db.mealPlan().all().isEmpty())

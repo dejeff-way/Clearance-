@@ -33,6 +33,10 @@ Recipes tab → **+ New**, or open any built-in recipe → **Copy & edit** (buil
 collection and under **My recipes**, can be edited or deleted, and are included in backups. A warning appears if a Meat recipe has an
 ingredient that looks like dairy (or vice versa).
 
+## Macro targets
+Protein is your fixed target. Fat defaults to 30% of the day's calorie budget (adjustable 20–40%, never below 50 g). Carbs fill whatever budget is left after protein and fat. Either carbs or fat can be fixed in grams instead. Because the targets follow the daily budget, they rise on active days and drop on carryover days.
+Home and the food log show each macro as "to go", "on target" (within ±10%) or "over", and warn when some entries have no carb or fat info. Protein, carbs and fat each have 7/30/90-day history.
+
 ## Meal plan & shopping list
 Recipes → **Plan** opens a Sunday–Saturday plan. It shows next week from Thursday onwards.
 - **Filling the plan:** add any recipe to any meal, standard or large. Blank days and meals are fine. **Meal prep** ("cook once · N days") fills the same meal on the following days and shows a cook-day schedule. Each day shows planned calories and protein against your target. Copy last week and Clear week are available.
@@ -110,7 +114,7 @@ All read-only; FORMA never writes to Health Connect.
 
 History beyond 30 days is not requested (`READ_HEALTH_DATA_HISTORY` is not used). The manifest also includes the privacy-rationale activity Health Connect requires. WorkManager adds its standard `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE` and `ACCESS_NETWORK_STATE` declarations; FORMA makes no network requests.
 
-## Tested (167 automated tests, all passing)
+## Tested (174 automated tests, all passing)
 - **Engine (43):** BMR ≈ 2,265 for the default profile; HC-total, HC-active and estimate modes; partial-day projection; rejecting incomplete totals; steps vs sessions (no double count); overlap de-duplication; budget minimum and warnings; fixed mode; remaining vs deficit; carryover 300 → 200 + 100, minimum-limited repayment, multiple overages, edit/cancel; trend smoothing, 14-day recommendation logic; progression; ingredient scaling.
 - **Data layer (20, Robolectric + Room):** 17 recipes in 4 collections, no desserts, Creami under Snacks; no dairy in meat recipes; raw-fish warnings; portion scaling; milk choice changes nutrition; favourites survive re-seed; log/edit portion/delete updates the summary; calories-only manual entry; workouts raise estimated (not measured) expenditure; carryover affects budget only; weight → BMR; set logging, completion, remembered substitutions; substitutions stay in the same movement pattern; **persistence after closing and reopening the database file**; backup round-trip.
 - **Health Connect sync (9, fake data source):** import; re-sync creates no duplicates; deletions propagate; manual weights untouched; only granted types stored; permission-denied, unavailable and revoked-mid-read states; synced total drives the budget.
