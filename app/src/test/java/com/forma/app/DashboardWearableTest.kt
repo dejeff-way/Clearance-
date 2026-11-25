@@ -85,6 +85,7 @@ class DashboardWearableTest {
         hc.aggregates = mapOf(today to DailyAggregate(today, steps = 4200, origins = mapOf(HcDataType.STEPS to setOf("com.fitbit.FitbitMobile"))))
         runBlocking { c.healthSyncer.sync() }
         rule.onNodeWithTag("tab_settings").performClick()
+        rule.waitUntil(5000) { rule.onAllNodes(androidx.compose.ui.test.hasText("Health Connect"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
         rule.onNode(androidx.compose.ui.test.hasText("Health Connect"), useUnmergedTree = true).performScrollTo().performClick()
         rule.waitUntil(5000) { rule.onAllNodesWithTagExists("hc_check_STEPS") }
         rule.waitUntil(5000) { text("hc_check_STEPS").contains("Fitbit") }

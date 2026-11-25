@@ -121,8 +121,12 @@ class UiFlowTest {
     }
 
     @Test fun `record carryover overage reduces tomorrow not today`() {
-        rule.onNodeWithText("Manage").performScrollTo().performClick()
-        waitFor { rule.onAllNodesWithTagExists("carryover") }
+        // Manual recording is only offered when automatic carryover is switched off
+        runBlocking { c.profile.update { it.copy(autoCarryover = false) } }
+        rule.onNodeWithTag("tab_settings").performClick()
+        waitFor { rule.onAllNodesWithTagExists("settings") }
+        rule.onNode(androidx.compose.ui.test.hasText("Calorie carryover", substring = false), useUnmergedTree = true).performScrollTo().performClick()
+        waitFor { rule.onAllNodesWithTagExists("record_overage") }
         rule.onNodeWithTag("record_overage").performClick()
         waitFor { rule.onAllNodesWithTagExists("co_amount") }
         rule.onNodeWithText("Today").performClick()

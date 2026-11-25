@@ -98,6 +98,8 @@ class AppContainer(
 
     suspend fun initialize() {
         profile.ensure()
+        // Automatic carryover counts from the first day it's available, never retroactively.
+        if (profile.ensure().autoCarryoverFromEpochDay == null) profile.update { it.copy(autoCarryoverFromEpochDay = time.today().toEpochDay()) }
         recipes.seed()
         library.seed()
     }

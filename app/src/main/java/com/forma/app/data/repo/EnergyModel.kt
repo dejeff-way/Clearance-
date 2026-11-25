@@ -22,6 +22,7 @@ import com.forma.engine.Macros
 import com.forma.engine.SessionSource
 import com.forma.engine.Sex
 import java.time.LocalDate
+import kotlin.math.roundToInt
 
 /** Immutable snapshot of everything the calorie engine reads. */
 data class EnergySnapshot(
@@ -89,12 +90,24 @@ class EnergyModel(val s: EnergySnapshot) {
         BudgetCalculator.baseBudget(p, ExpenditureEstimator.estimate(p, inputs(day)).projectedDayKcal)
     }
 
+    /** First day automatic carryover applies to, or null when it's turned off. */
+    val autoCarryoverFrom: LocalDate? get() =
+        if (s.profile.autoCarryover) s.profile.autoCarryoverFromEpochDay?.let(LocalDate::ofEpochDay) else null
+
     val carryover: CarryoverState by lazy {
-        val items = s.carryover.filter { !it.cancelled }.map {
-            CarryoverItem(it.id, LocalDate.ofEpochDay(it.epochDay), it.kcal,
-                if (it.kind == CarryoverKind.UNLOGGED_ADJUSTMENT.name) CarryoverKind.UNLOGGED_ADJUSTMENT else CarryoverKind.OVERAGE)
+        val autoFrom = autoCarryoverFrom
+        val items = s.carryover.filter { !it.cancelled }
+            // From the day automatic carryover starts, "ate more than I logged" estimates are already part of that
+            // day's logged food, so they must not also count as a separate carryover item.
+            .filterNot { autoFrom != null && it.epochDay >= autoFrom.toEpochDay() && it.kind != CarryoverKind.OVERAGE.name }
+            .map {
+                CarryoverItem(it.id, LocalDate.ofEpochDay(it.epochDay), it.kcal,
+                    if (it.kind == CarryoverKind.UNLOGGED_ADJUSTMENT.name) CarryoverKind.UNLOGGED_ADJUSTMENT else CarryoverKind.OVERAGE)
+            }
+        CarryoverLedger.compute(items, s.profile.maxRepaymentPerDay, s.profile.minimumBudgetKcal, s.today, ::baseBudget, autoFrom) { d, repaid ->
+            if (!hasFood(d)) null
+            else (consumed(d).kcal - (baseBudget(d) - repaid)).roundToInt().coerceAtLeast(0)
         }
-        CarryoverLedger.compute(items, s.profile.maxRepaymentPerDay, s.profile.minimumBudgetKcal, s.today, ::baseBudget)
     }
 
     private fun scheduledRepayment(day: LocalDate): Int =

@@ -81,3 +81,46 @@ class CarryoverLedgerTest {
         assertEquals(2100, b.finalBudget) // spec example: 2,300 − 200 = 2,100
     }
 }
+
+class AutoCarryoverTest {
+    private val d0 = LocalDate.of(2026, 11, 20)
+
+    /** Simulates logged intake per day against a 2,300 base budget. */
+    private fun run(intake: Map<LocalDate, Int>, today: LocalDate, from: LocalDate = d0, manual: List<CarryoverItem> = emptyList()) =
+        CarryoverLedger.compute(manual, 200, 2000, today, { 2300 }, from) { d, repaid ->
+            intake[d]?.let { it - (2300 - repaid) }?.coerceAtLeast(0)
+        }
+
+    @Test fun `logged overage carries to the next day automatically`() {
+        val s = run(mapOf(d0 to 2600), d0.plusDays(1))
+        assertEquals(300, s.autoItems.single().kcal)
+        assertEquals(200, s.scheduledToday)
+        assertEquals(100, s.balanceAfterToday)
+    }
+
+    @Test fun `today is never counted until it is over`() {
+        val s = run(mapOf(d0 to 3000), d0)
+        assertEquals(0, s.autoItems.size)
+        assertEquals(0, s.balanceAfterToday)
+    }
+
+    @Test fun `repayment lowers the next day's budget, and eating within it adds nothing more`() {
+        // Day 1 over by 300; day 2 budget 2,100 and eats 2,100 → no new overage; day 3 repays the last 100.
+        val s = run(mapOf(d0 to 2600, d0.plusDays(1) to 2100), d0.plusDays(2))
+        assertEquals(1, s.autoItems.size)
+        assertEquals(100, s.scheduledToday)
+        // Eating the normal 2,300 on a repayment day is itself an overage of 200 vs the reduced budget
+        val s2 = run(mapOf(d0 to 2600, d0.plusDays(1) to 2300), d0.plusDays(2))
+        assertEquals(listOf(300, 200), s2.autoItems.map { it.kcal })
+    }
+
+    @Test fun `days before automatic carryover started are ignored`() {
+        val s = run(mapOf(d0 to 2900, d0.plusDays(1) to 2500), d0.plusDays(2), from = d0.plusDays(1))
+        assertEquals(listOf(200), s.autoItems.map { it.kcal })
+    }
+
+    @Test fun `off means only manual entries count`() {
+        val s = CarryoverLedger.compute(emptyList(), 200, 2000, d0.plusDays(2), { 2300 }, null) { _, _ -> 999 }
+        assertEquals(0, s.balanceAfterToday)
+    }
+}

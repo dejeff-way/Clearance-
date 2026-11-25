@@ -93,6 +93,7 @@ fun CarryoverScreen(nav: NavController) {
     val todaySummary = m.today
     var adding by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<CarryoverEntity?>(null) }
+    val auto = m.autoCarryoverFrom != null
 
     Column(Modifier.fillMaxSize().statusBarsPadding().testTag("carryover")) {
         BackBar("Calorie carryover", { nav.popBackStack() })
@@ -121,13 +122,21 @@ fun CarryoverScreen(nav: NavController) {
                 }
             }
             Spacer(Modifier.height(Space.m))
-            PrimaryButton("Record an overage", { adding = true }, Modifier.fillMaxWidth().testTag("record_overage"), icon = Icons.Outlined.Add)
-            Spacer(Modifier.height(Space.m))
-            Note(
-                "Carryover only adjusts upcoming budgets. It never adds calories to your food log, and it's kept separate from your " +
-                    "actual deficit. If you already logged everything you ate, that food is already counted in your intake — recording " +
-                    "an overage simply spreads a small budget reduction over the next days. Don't log the same food again.",
-            )
+            if (auto) {
+                Note(
+                    "Carryover is automatic. When a day ends with more logged than its budget, the difference is spread over the " +
+                        "next days — nothing to record. It only lowers upcoming budgets; it never adds to your food log.",
+                    modifier = Modifier.testTag("auto_note"),
+                )
+                Spacer(Modifier.height(Space.m))
+                SecondaryButton("Ate more than I logged", { adding = true }, Modifier.fillMaxWidth().testTag("record_unlogged"), icon = Icons.Outlined.Add)
+            } else {
+                PrimaryButton("Record an overage", { adding = true }, Modifier.fillMaxWidth().testTag("record_overage"), icon = Icons.Outlined.Add)
+                Spacer(Modifier.height(Space.m))
+                Note(
+                    "Automatic carryover is off, so overages are only counted when you record them here. Turn it on in Targets & budget.",
+                )
+            }
 
             if (co.history.any { it.repaid > 0 || it.scheduled > 0 } || co.projection.isNotEmpty()) {
                 SectionHeader("Schedule")
@@ -146,8 +155,23 @@ fun CarryoverScreen(nav: NavController) {
                 }
             }
 
-            SectionHeader("Recorded")
-            FormaCard {
+            if (auto) {
+                SectionHeader("Over budget")
+                FormaCard {
+                    val autoRecent = co.autoItems.sortedByDescending { it.date }.take(14)
+                    if (autoRecent.isEmpty()) Text("No days over budget since ${Fmt.medDate(m.autoCarryoverFrom!!)}.", style = Forma.type.bodySmall, color = c.textSecondary)
+                    autoRecent.forEachIndexed { i, it ->
+                        if (i > 0) Hairline()
+                        Row(Modifier.fillMaxWidth().padding(vertical = Space.m).testTag("auto_${it.date}"), verticalAlignment = Alignment.CenterVertically) {
+                            Text(Fmt.relativeDay(it.date, today), style = Forma.type.body, color = c.text, modifier = Modifier.weight(1f))
+                            Text("+${Fmt.kcal(it.kcal)} kcal", style = Forma.type.number, color = c.warn)
+                        }
+                    }
+                }
+            }
+
+            if (!auto || entries.isNotEmpty()) SectionHeader(if (auto) "Earlier entries" else "Recorded")
+            if (!auto || entries.isNotEmpty()) FormaCard {
                 if (entries.isEmpty()) Text("Nothing recorded yet.", style = Forma.type.bodySmall, color = c.textSecondary)
                 entries.forEachIndexed { i, e ->
                     if (i > 0) Hairline()
@@ -167,7 +191,8 @@ fun CarryoverScreen(nav: NavController) {
             }
             SectionHeader("Rules")
             FormaCard {
-                Text("• Repayment starts the day after the overage.\n• At most ${m.s.profile.maxRepaymentPerDay} kcal is repaid per day.\n" +
+                Text((if (auto) "• Counted automatically once a day is over (today never counts until it ends).\n" else "") +
+                    "• Repayment starts the day after the overage.\n• At most ${m.s.profile.maxRepaymentPerDay} kcal is repaid per day.\n" +
                     "• Your budget never drops below ${Fmt.kcal(m.s.profile.minimumBudgetKcal)} kcal; anything that doesn't fit carries forward.\n" +
                     "• One big day is never turned into an aggressive restriction.",
                     style = Forma.type.bodySmall, color = c.textSecondary)
@@ -176,7 +201,7 @@ fun CarryoverScreen(nav: NavController) {
         }
     }
 
-    if (adding) AddSheet(m, today, onDismiss = { adding = false },
+    if (adding) AddSheet(m, today, auto, onDismiss = { adding = false },
         onOverage = { k, d, n -> vm.addOverage(k, d, n); adding = false },
         onUnlogged = { k, d, n, carry -> vm.addUnlogged(k, d, n, carry); adding = false })
     editing?.let { e -> EditSheet(e, { editing = null }, { vm.update(it); editing = null }, { vm.setCancelled(e, !e.cancelled); editing = null }, { vm.delete(e); editing = null }) }
@@ -186,20 +211,22 @@ private enum class Mode { OVER, UNLOGGED }
 
 @Composable
 private fun AddSheet(
-    m: EnergyModel, today: LocalDate, onDismiss: () -> Unit,
+    m: EnergyModel, today: LocalDate, auto: Boolean, onDismiss: () -> Unit,
     onOverage: (Int, LocalDate, String?) -> Unit, onUnlogged: (Int, LocalDate, String?, Boolean) -> Unit,
 ) {
     val c = Forma.colors
-    var mode by remember { mutableStateOf(Mode.OVER) }
+    var mode by remember { mutableStateOf(if (auto) Mode.UNLOGGED else Mode.OVER) }
     var day by remember { mutableStateOf(today.minusDays(1)) }
     val s = m.summary(day)
     val detected = s.overBudgetKcal
     var amount by remember(day, mode) { mutableStateOf(if (mode == Mode.OVER && detected > 0) detected.toString() else "") }
     var note by remember { mutableStateOf("") }
     var carry by remember { mutableStateOf(true) }
-    FormaSheet(onDismiss, "Record carryover") {
-        Segmented(Mode.entries, mode, { if (it == Mode.OVER) "Went over budget" else "Ate more than I logged" }, { mode = it }, Modifier.fillMaxWidth().testTag("co_mode"))
-        Spacer(Modifier.height(Space.l))
+    FormaSheet(onDismiss, if (auto) "Ate more than I logged" else "Record carryover") {
+        if (!auto) {
+            Segmented(Mode.entries, mode, { if (it == Mode.OVER) "Went over budget" else "Ate more than I logged" }, { mode = it }, Modifier.fillMaxWidth().testTag("co_mode"))
+            Spacer(Modifier.height(Space.l))
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
             Chip("Yesterday", day == today.minusDays(1), { day = today.minusDays(1) })
             Chip("Today", day == today, { day = today })
@@ -215,17 +242,18 @@ private fun AddSheet(
             Spacer(Modifier.height(Space.s))
             Note("This won't add calories to your log or change that day's deficit. It only lowers the next days' budgets by up to ${m.s.profile.maxRepaymentPerDay} kcal a day.")
         } else {
-            Note("Use this for food you couldn't log precisely. The estimate is added to that day's intake (so the deficit stays honest) and, if you choose, repaid gently over the next days.")
+            Note(if (auto) "Use this for food you couldn't log precisely. The estimate is added to that day's food log; if it puts the day over budget, the overage carries over automatically."
+                else "Use this for food you couldn't log precisely. The estimate is added to that day's intake (so the deficit stays honest) and, if you choose, repaid gently over the next days.")
         }
         Spacer(Modifier.height(Space.m))
         FormaField(amount, { amount = it }, "Calories", suffix = "kcal", numeric = true, decimal = false, modifier = Modifier.testTag("co_amount"))
         Spacer(Modifier.height(Space.s))
         FormaField(note, { note = it }, "Note (optional)")
-        if (mode == Mode.UNLOGGED) SwitchRow("Also repay through carryover", "Lowers upcoming budgets to offset it.", carry, { carry = it })
+        if (mode == Mode.UNLOGGED && !auto) SwitchRow("Also repay through carryover", "Lowers upcoming budgets to offset it.", carry, { carry = it })
         Spacer(Modifier.height(Space.l))
         val k = amount.toIntOrNull()
         PrimaryButton("Save", {
-            if (k != null && k > 0) { if (mode == Mode.OVER) onOverage(k, day, note.ifBlank { null }) else onUnlogged(k, day, note.ifBlank { null }, carry) }
+            if (k != null && k > 0) { if (mode == Mode.OVER) onOverage(k, day, note.ifBlank { null }) else onUnlogged(k, day, note.ifBlank { null }, carry && !auto) }
         }, Modifier.fillMaxWidth().testTag("co_save"), enabled = k != null && k in 1..5000)
     }
 }

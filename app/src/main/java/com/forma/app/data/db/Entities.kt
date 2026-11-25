@@ -47,6 +47,10 @@ data class ProfileEntity(
     val fatTargetG: Int? = null,
     /** Fixed carb target in grams; when null, carbs are the rest of the budget. */
     val carbTargetG: Int? = null,
+    // ── v8 (automatic carryover) ──
+    @ColumnInfo(defaultValue = "1") val autoCarryover: Boolean = true,
+    /** First day whose overage is detected automatically (set when the feature first runs, so old days don't count). */
+    val autoCarryoverFromEpochDay: Long? = null,
     val updatedAt: Long = System.currentTimeMillis(),
 )
 

@@ -8,6 +8,9 @@ enum class CarryoverKind {
 
     /** "I ate more than I logged" — an estimate of unlogged intake. */
     UNLOGGED_ADJUSTMENT,
+
+    /** Calculated automatically: logged intake exceeded that day's budget. */
+    AUTO,
 }
 
 data class CarryoverItem(
@@ -42,6 +45,8 @@ data class CarryoverState(
     val projectedClearDate: LocalDate?,
     /** The day the balance was last fully cleared (in the past/today). */
     val clearedOn: LocalDate?,
+    /** Overages FORMA found automatically (one per completed day that went over budget). */
+    val autoItems: List<CarryoverItem> = emptyList(),
 )
 
 /**
@@ -58,15 +63,25 @@ data class CarryoverState(
 object CarryoverLedger {
     const val PROJECTION_LIMIT_DAYS = 90
 
+    /**
+     * @param autoFrom first day whose overage is detected automatically (null = automatic carryover off)
+     * @param autoOverage for a completed day and the repayment applied that day, how far logged intake went over the
+     *   day's final budget (0 or null when it didn't). Called in date order, so repayments of earlier overages are
+     *   already reflected.
+     */
     fun compute(
         items: List<CarryoverItem>,
         maxPerDay: Int,
         minimumBudget: Int,
         today: LocalDate,
         baseBudgetFor: (LocalDate) -> Int?,
+        autoFrom: LocalDate? = null,
+        autoOverage: (LocalDate, Int) -> Int? = { _, _ -> null },
     ): CarryoverState {
-        val valid = items.filter { it.kcal > 0 }.sortedBy { it.date }
-        if (valid.isEmpty() || maxPerDay <= 0) {
+        val valid = items.filter { it.kcal > 0 }.sortedBy { it.date }.toMutableList()
+        val auto = mutableListOf<CarryoverItem>()
+        val autoStart = autoFrom?.takeIf { !it.isAfter(today) }
+        if ((valid.isEmpty() && autoStart == null) || maxPerDay <= 0) {
             val total = valid.sumOf { it.kcal }
             return CarryoverState(total, 0, total, 0, total, emptyList(), emptyList(), null, null)
         }
@@ -75,10 +90,12 @@ object CarryoverLedger {
         var clearedOn: LocalDate? = null
         var scheduledToday = 0
         var balanceStartToday = 0
-        var d = valid.first().date.plusDays(1)
+        val firstItemDay = valid.firstOrNull()?.date?.plusDays(1)
+        var d = listOfNotNull(firstItemDay, autoStart).min().let { maxOf(it, today.minusDays(400)) }
         while (!d.isAfter(today)) {
-            val owedBefore = valid.filter { it.date.isBefore(d) }.sumOf { it.kcal } - repaid
+            val owedBefore = (valid + auto).filter { it.date.isBefore(d) }.sumOf { it.kcal } - repaid
             if (d == today) balanceStartToday = owedBefore.coerceAtLeast(0)
+            var repaidToday = 0
             if (owedBefore > 0) {
                 val scheduled = minOf(maxPerDay, owedBefore)
                 if (d == today) scheduledToday = scheduled
@@ -88,11 +105,17 @@ object CarryoverLedger {
                 val r = scheduled.coerceAtMost(headroom.coerceAtLeast(0))
                 history += CarryoverDay(d, owedBefore, scheduled, r, r < scheduled, projected = false)
                 repaid += r
-                if (owedBefore - history.last().repaid <= 0) clearedOn = d
+                repaidToday = r
+                if (owedBefore - r <= 0) clearedOn = d
+            }
+            // Detect a completed day's overage automatically; it starts being repaid tomorrow.
+            if (autoStart != null && !d.isBefore(autoStart) && d.isBefore(today)) {
+                val over = autoOverage(d, repaidToday) ?: 0
+                if (over > 0) auto += CarryoverItem(-d.toEpochDay(), d, over, CarryoverKind.AUTO)
             }
             d = d.plusDays(1)
         }
-        val total = valid.sumOf { it.kcal }
+        val total = (valid + auto).sumOf { it.kcal }
         // Overages recorded today begin tomorrow; include everything for the forward balance.
         val balanceAfterToday = (total - repaid).coerceAtLeast(0)
         if (balanceAfterToday > 0) clearedOn = null
@@ -122,6 +145,7 @@ object CarryoverLedger {
             projection = projection,
             projectedClearDate = clearDate,
             clearedOn = clearedOn,
+            autoItems = auto,
         )
     }
 }

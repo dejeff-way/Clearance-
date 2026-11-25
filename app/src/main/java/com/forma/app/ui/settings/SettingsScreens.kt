@@ -128,7 +128,7 @@ fun SettingsScreen(nav: NavController) {
                     " · protein ${p.proteinTargetG} g · min ${Fmt.kcal(p.minimumBudgetKcal)}",
                 Icons.Outlined.Tune, { nav.navigate(Routes.TARGETS) }, trailing = { Chevron() })
             Hairline()
-            ListRow("Calorie carryover", "Up to ${p.maxRepaymentPerDay} kcal/day · balance ${Fmt.kcal(model?.carryover?.balanceAfterToday ?: 0)}",
+            ListRow("Calorie carryover", (if (p.autoCarryover) "Automatic · " else "") + "up to ${p.maxRepaymentPerDay} kcal/day · balance ${Fmt.kcal(model?.carryover?.balanceAfterToday ?: 0)}",
                 Icons.Outlined.SwapVert, { nav.navigate(Routes.CARRYOVER) }, trailing = { Chevron() })
             Hairline()
             ListRow("Health Connect", if (meta?.grantedPermissions.isNullOrBlank()) "Not connected" else "Connected" +
@@ -341,6 +341,7 @@ fun TargetsEditScreen(nav: NavController) {
     var protein by remember(p.id) { mutableStateOf(p.proteinTargetG.toString()) }
     var minimum by remember(p.id) { mutableStateOf(p.minimumBudgetKcal.toString()) }
     var repay by remember(p.id) { mutableStateOf(p.maxRepaymentPerDay.toString()) }
+    var autoCarry by remember(p.id) { mutableStateOf(p.autoCarryover) }
     var baseline by remember(p.id) { mutableStateOf(p.baselineActivityFactor) }
     var maint by remember(p.id) { mutableStateOf(p.maintenanceActivityFactor) }
     var stepGoal by remember(p.id) { mutableStateOf(p.stepGoal.toString()) }
@@ -392,6 +393,8 @@ fun TargetsEditScreen(nav: NavController) {
                 supporting = "FORMA warns and holds the budget here rather than going lower.", modifier = Modifier.testTag("minimum_input"))
             Spacer(Modifier.height(Space.s))
             FormaField(repay, { repay = it }, "Max carryover repayment", suffix = "kcal/day", numeric = true, decimal = false, modifier = Modifier.testTag("repay_input"))
+            com.forma.app.ui.components.SwitchRow("Automatic carryover", "When a day ends over budget, the extra is spread over the next days automatically.",
+                autoCarry, { autoCarry = it })
 
             SectionHeader("Activity")
             FormaField(stepGoal, { stepGoal = it }, "Daily step goal", suffix = "steps", numeric = true, decimal = false, modifier = Modifier.testTag("step_goal_input"))
@@ -464,7 +467,9 @@ fun TargetsEditScreen(nav: NavController) {
                                 desiredDeficitKcal = d, proteinTargetG = pr, minimumBudgetKcal = mn, maxRepaymentPerDay = r,
                                 baselineActivityFactor = baseline, maintenanceActivityFactor = maint,
                                 stepGoal = stepGoal.toInt(), wearableAdjustmentPct = adjPct, maxActivityBonusKcal = bonusCap,
-                                fatPctOfBudget = fatPct, fatTargetG = fatFixed.toIntOrNull(), carbTargetG = carbFixed.toIntOrNull())
+                                fatPctOfBudget = fatPct, fatTargetG = fatFixed.toIntOrNull(), carbTargetG = carbFixed.toIntOrNull(),
+                                autoCarryover = autoCarry,
+                                autoCarryoverFromEpochDay = if (autoCarry && !it.autoCarryover) container.time.today().toEpochDay() else it.autoCarryoverFromEpochDay)
                         }
                         nav.popOnMain()
                     }

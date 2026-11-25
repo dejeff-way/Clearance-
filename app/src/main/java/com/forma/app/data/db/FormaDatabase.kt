@@ -15,7 +15,7 @@ import androidx.room.TypeConverters
         ExerciseEntity::class, WorkoutEntity::class, WorkoutSlotEntity::class, ProgramEntity::class, ProgramDayEntity::class,
         ActiveProgramEntity::class, MealPlanEntity::class, ShoppingCheckEntity::class, PantryItemEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -33,6 +33,13 @@ abstract class FormaDatabase : RoomDatabase() {
     abstract fun mealPlan(): MealPlanDao
 
     companion object {
+        /** v7 → v8: automatic carryover (starts from the day of the update). */
+        val MIGRATION_7_8 = object : androidx.room.migration.Migration(7, 8) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE profile ADD COLUMN autoCarryover INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE profile ADD COLUMN autoCarryoverFromEpochDay INTEGER")
+            }
+        }
         /** v6 → v7: carb and fat targets. */
         val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
@@ -121,7 +128,7 @@ abstract class FormaDatabase : RoomDatabase() {
         fun create(context: Context, inMemory: Boolean = false): FormaDatabase {
             val b = if (inMemory) Room.inMemoryDatabaseBuilder(context, FormaDatabase::class.java)
             else Room.databaseBuilder(context, FormaDatabase::class.java, "forma.db")
-            return b.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build()
+            return b.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build()
         }
     }
 }

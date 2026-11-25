@@ -125,8 +125,14 @@ fun HomeScreen(nav: NavController) {
                         style = Forma.type.caption, color = c.textSecondary)
                     Text("Planned deficit ${Fmt.kcal(sum.budget.plannedDeficit)} · " + if (sum.onTrack) "on track" else "over budget by ${Fmt.kcal(sum.overBudgetKcal)}",
                         style = Forma.type.caption, color = if (sum.onTrack) c.accent else c.negative, modifier = Modifier.testTag("on_track"))
+                    if (!sum.onTrack && s.model.autoCarryoverFrom != null) {
+                        Text("Anything over carries into the next days automatically (up to ${s.profile.maxRepaymentPerDay} kcal a day).",
+                            style = Forma.type.caption, color = c.textTertiary, modifier = Modifier.testTag("auto_carry_hint"))
+                    }
                     if (sum.budget.repaymentApplied > 0) {
-                        Text("Carryover repayment −${sum.budget.repaymentApplied} kcal today", style = Forma.type.caption, color = c.warn)
+                        Text("Includes −${sum.budget.repaymentApplied} kcal carried over from going over earlier" +
+                            (s.model.carryover.projectedClearDate?.takeIf { s.model.carryover.balanceAfterToday > 0 }?.let { " · clears ${Fmt.relativeDay(it, s.today).lowercase()}" } ?: ""),
+                            style = Forma.type.caption, color = c.warn, modifier = Modifier.testTag("carry_line"))
                     }
                 }
                 Icon(Icons.Outlined.ChevronRight, "See calculation", tint = c.textTertiary, modifier = Modifier.size(18.dp))
@@ -217,45 +223,6 @@ fun HomeScreen(nav: NavController) {
             }
         }
 
-        // ── Weight trend ────────────────────────────────────────
-        SectionHeader("Weight trend", action = "Progress", onAction = { nav.navigate(Routes.PROGRESS) })
-        FormaCard(onClick = { nav.navigate(Routes.PROGRESS) }) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("7-day average", style = Forma.type.caption, color = c.textSecondary)
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text(s.trendWeight?.let { Fmt.weight(it, s.settings.weightUnit) } ?: "—", style = Forma.type.numberLarge, color = c.text)
-                        Text(" ${Fmt.weightUnit(s.settings.weightUnit)}", style = Forma.type.bodySmall, color = c.textTertiary, modifier = Modifier.padding(bottom = 3.dp))
-                    }
-                    Text(
-                        when {
-                            !s.hasWeighIns -> "Log your first weigh-in to start the trend."
-                            s.weekChange == null -> "Trend builds after a week of weigh-ins."
-                            else -> "${Fmt.signedOne(Fmt.fromLb(s.weekChange, s.settings.weightUnit))} ${Fmt.weightUnit(s.settings.weightUnit)} vs. last week"
-                        },
-                        style = Forma.type.caption, color = c.textTertiary,
-                    )
-                }
-                Sparkline(s.weightTrend, Modifier.width(110.dp).height(44.dp))
-            }
-        }
-
-        // ── Carryover ───────────────────────────────────────────
-        SectionHeader("Calorie carryover", action = "Manage", onAction = { nav.navigate(Routes.CARRYOVER) })
-        val co = s.model.carryover
-        FormaCard(onClick = { nav.navigate(Routes.CARRYOVER) }) {
-            if (co.balanceStartOfToday == 0 && co.balanceAfterToday == 0) {
-                Text("No outstanding balance", style = Forma.type.bodyStrong, color = c.text)
-                Text("If you go over budget with food you didn't log, record it here and it will be repaid gently over the next days.",
-                    style = Forma.type.caption, color = c.textTertiary)
-            } else {
-                Row {
-                    StatBlock("Outstanding", Fmt.kcal(co.balanceAfterToday), "kcal", Modifier.weight(1f))
-                    StatBlock("Repaying today", Fmt.kcal(sum.budget.repaymentApplied), "kcal", Modifier.weight(1f), valueColor = c.warn)
-                    StatBlock("Clears", co.projectedClearDate?.let { Fmt.relativeDay(it, s.today) } ?: "—", null, Modifier.weight(1f))
-                }
-            }
-        }
         Spacer(Modifier.height(Space.l))
         Text("Calorie and expenditure figures are estimates, not exact physiological measurements.",
             style = Forma.type.caption, color = c.textTertiary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())

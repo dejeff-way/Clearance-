@@ -142,10 +142,7 @@ fun FoodLogScreen(nav: NavController, epochDay: Long) {
                     }
                 }
                 Spacer(Modifier.height(Space.m))
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                    PrimaryButton("Add food", { nav.navigate(Routes.addFood(day)) }, Modifier.weight(1f).testTag("log_add_food"), icon = Icons.Outlined.Add)
-                    SecondaryButton("Over budget?", { nav.navigate(Routes.CARRYOVER) }, Modifier.weight(1f))
-                }
+                PrimaryButton("Add food", { nav.navigate(Routes.addFood(day)) }, Modifier.fillMaxWidth().testTag("log_add_food"), icon = Icons.Outlined.Add)
                 if (summary != null && model != null) {
                     Spacer(Modifier.height(Space.m))
                     com.forma.app.ui.components.MacrosCard(model!!.macroTargets(date, summary), entries.count { it.carbsG == null || it.fatG == null })
@@ -372,6 +369,6 @@ private fun ManualEntry(meal: Category, onMeal: (Category) -> Unit, onAdd: (Stri
             if (k != null) onAdd(name.ifBlank { "Quick add" }, k, protein.toDoubleOrNull(), carbs.toDoubleOrNull(), fat.toDoubleOrNull())
         }, Modifier.fillMaxWidth().testTag("manual_add"), enabled = k != null && k >= 0)
         Spacer(Modifier.height(Space.m))
-        Note("Ate more than you can log precisely? Use Calorie Carryover → \"I ate more than I logged\" for an estimate instead.", Tone.NEUTRAL)
+        Note("Not sure of the exact number? A rough estimate is fine — anything over your budget carries over automatically.", Tone.NEUTRAL)
     }
 }
