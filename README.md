@@ -94,10 +94,10 @@ Not every device shares every type. The **Data check** on the Health Connect scr
    - Otherwise BMR + Health Connect *Active calories*.
    - Otherwise an estimate: BMR × 1.2 + the **larger** of (steps beyond 5,000) and (net exercise-session energy). Manual sessions marked "not recorded by a device" are the only thing added to measured totals.
 2. **Budget** = expenditure − desired deficit (default 500), or a fixed target. Never below the minimum (default 2,000): it is held there with a warning.
-3. **Weekly report** — every Sunday at 6 am (notification + Home card until dismissed): calories, deficit (≈ lb of fat), average weight, steps, a 0–100 sleep score from duration and sleep stages, workouts, and — after 4 weeks of workouts — personal records by estimated strength (`weight × (1 + reps/30)`). Every week is saved under Progress → Weekly reports and included in backups.
-4. **Carryover (automatic)** — when a finished day's logged food is over its budget, the difference is carried forward on its own (nothing to record; today only counts once it ends). Overages are repaid from the next day, max 200 kcal/day, never pushing a budget below the minimum; the rest carries forward. Carryover only changes budgets — never intake or the actual deficit.
+3. **Carryover (automatic)** — when a finished day's logged food is over its budget, the difference is carried forward on its own (nothing to record; today only counts once it ends). Overages are repaid from the next day, max 200 kcal/day, never pushing a budget below the minimum; the rest carries forward. Carryover only changes budgets — never intake or the actual deficit.
 4. **Actual estimated deficit** = burned − consumed, shown separately from planned deficit and remaining budget.
 5. **Trend** — rolling 7-day average; after 14 days of weigh-ins an optional ≤200 kcal recommendation appears. Nothing changes automatically.
+6. **Weekly report** — every Sunday at 6 am (notification + Home card until dismissed): calories, deficit (≈ lb of fat), average weight, steps, a 0–100 sleep score from duration and sleep stages, workouts, and — after 4 weeks of workouts — personal records by estimated strength (`weight × (1 + reps/30)`). Every week is saved under Progress → Weekly reports and included in backups.
 
 Every figure is labelled as an estimate; tap the dashboard summary to see the full calculation.
 
