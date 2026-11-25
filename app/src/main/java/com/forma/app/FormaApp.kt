@@ -20,6 +20,8 @@ open class FormaApp : Application() {
         super.onCreate()
         container = createContainer()
         container.appScope.launch { container.initialize() }
+        com.forma.app.data.report.ReportNotifier.ensureChannel(this)
+        com.forma.app.data.report.ReportWorker.schedule(this, container.time)
 
         // Foreground sync: whenever the app comes to the foreground, refresh Health Connect (if permitted).
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
@@ -32,6 +34,7 @@ open class FormaApp : Application() {
                         val meta = container.db.syncMeta().get()
                         val bg = meta?.backgroundSyncEnabled == true && container.healthSource.backgroundReadGranted()
                         SyncWorker.schedule(this@FormaApp, bg)
+                        container.reports.refresh()
                     }
                 }
             }

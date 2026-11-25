@@ -33,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -114,6 +115,12 @@ fun FormaRoot(nav: NavHostController = rememberNavController()) {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val showBar = tabs.any { it.route == route }
+    // Screens opened from a notification (e.g. the Sunday report)
+    val container = com.forma.app.ui.LocalContainer.current
+    val pending by container.pendingRoute.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(pending) {
+        pending?.let { r -> container.pendingRoute.value = null; runCatching { nav.navigate(r) { launchSingleTop = true } } }
+    }
     Column(Modifier.fillMaxSize().background(c.bg)) {
         Box(Modifier.weight(1f)) {
             NavHost(
@@ -159,6 +166,10 @@ fun FormaRoot(nav: NavHostController = rememberNavController()) {
                 composable("workout_detail/{id}") { WorkoutDetailScreen(nav, it.arguments?.getString("id")!!) }
                 composable("program_detail/{id}") { ProgramDetailScreen(nav, it.arguments?.getString("id")!!) }
                 composable(Routes.HEALTH) { HealthConnectScreen(nav) }
+                composable(com.forma.app.ui.report.ReportRoutes.LIST) { com.forma.app.ui.report.WeeklyReportsScreen(nav) }
+                composable("report/{week}", listOf(navArgument("week") { type = NavType.LongType })) {
+                    com.forma.app.ui.report.WeeklyReportScreen(nav, it.arguments!!.getLong("week"))
+                }
                 composable(Routes.PROFILE) { ProfileEditScreen(nav) }
                 composable(Routes.TARGETS) { TargetsEditScreen(nav) }
             }

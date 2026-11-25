@@ -90,6 +90,7 @@ fun HomeScreen(nav: NavController) {
             Tag(activityStatus(s), tone = if (s.workout.done) Tone.ACCENT else Tone.NEUTRAL)
         }
         SyncStatusRow(s.sync, syncing, onRefresh = { vm.sync() }, onOpen = { nav.navigate(Routes.HEALTH) })
+        com.forma.app.ui.report.WeeklyReportCard(nav)
 
         // ── Daily summary hero ───────────────────────────────────
         Spacer(Modifier.height(Space.xl))

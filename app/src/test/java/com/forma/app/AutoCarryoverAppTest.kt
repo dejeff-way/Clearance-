@@ -127,7 +127,7 @@ class AutoCarryoverAppTest {
         sql.version = 7; sql.close()
         val db = androidx.room.Room.databaseBuilder(ctx, FormaDatabase::class.java, "migrate8.db")
             .addMigrations(FormaDatabase.MIGRATION_1_2, FormaDatabase.MIGRATION_2_3, FormaDatabase.MIGRATION_3_4, FormaDatabase.MIGRATION_4_5,
-                FormaDatabase.MIGRATION_5_6, FormaDatabase.MIGRATION_6_7, FormaDatabase.MIGRATION_7_8).build()
+                FormaDatabase.MIGRATION_5_6, FormaDatabase.MIGRATION_6_7, FormaDatabase.MIGRATION_7_8, FormaDatabase.MIGRATION_8_9).build()
         runBlocking {
             val p = db.profile().get()!!
             assertEquals(185, p.proteinTargetG); assertTrue(p.autoCarryover); assertNull(p.autoCarryoverFromEpochDay)

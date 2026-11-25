@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.DeleteForever
@@ -152,6 +153,24 @@ fun SettingsScreen(nav: NavController) {
 
         SectionHeader("Appearance")
         Segmented(ThemeMode.entries, settings.theme, { it.label }, { scope.launch { container.settings.setTheme(it) } }, Modifier.fillMaxWidth().testTag("theme_toggle"))
+
+        SectionHeader("Weekly report")
+        run {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val notify by container.settings.weeklyReportNotify.collectAsStateWithLifecycle(true)
+            var granted by remember { mutableStateOf(com.forma.app.data.report.ReportNotifier.canNotify(ctx)) }
+            val launcher = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
+                granted = ok; scope.launch { container.settings.setWeeklyReportNotify(ok) }
+            }
+            FormaCard(padding = PaddingValues(horizontal = Space.l, vertical = Space.xs)) {
+                com.forma.app.ui.components.SwitchRow("Sunday notification", "Your week in review at 6 am every Sunday.", notify && granted, { on: Boolean ->
+                    if (on && !granted && android.os.Build.VERSION.SDK_INT >= 33) launcher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    else scope.launch { container.settings.setWeeklyReportNotify(on) }
+                })
+                Hairline()
+                ListRow("Past weekly reports", "Every week is kept", Icons.Outlined.DateRange, { nav.navigate(com.forma.app.ui.report.ReportRoutes.LIST) }, trailing = { Chevron() })
+            }
+        }
 
         SectionHeader("Data")
         FormaCard(padding = PaddingValues(horizontal = Space.l, vertical = Space.xs)) {

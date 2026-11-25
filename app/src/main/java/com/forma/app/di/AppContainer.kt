@@ -18,6 +18,8 @@ import com.forma.app.health.HealthDataSource
 import com.forma.app.health.HealthSyncer
 import com.forma.app.util.TimeProvider
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -100,11 +102,19 @@ class AppContainer(
 
     val syncMeta = db.syncMeta().observe().map { it }
 
+    /** Sunday weekly reports (saved; never deleted automatically). */
+    val reports = com.forma.app.data.report.WeeklyReportRepository(db, time,
+        model = { energyModel.filterNotNull().first() }, catalog = { catalog.filterNotNull().first() })
+
+    /** A screen to open, set when the app is launched from a notification. */
+    val pendingRoute = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
     suspend fun initialize() {
         profile.ensure()
         // Automatic carryover counts from the first day it's available, never retroactively.
         if (profile.ensure().autoCarryoverFromEpochDay == null) profile.update { it.copy(autoCarryoverFromEpochDay = time.today().toEpochDay()) }
         recipes.seed()
         library.seed()
+        runCatching { reports.refresh() }
     }
 }

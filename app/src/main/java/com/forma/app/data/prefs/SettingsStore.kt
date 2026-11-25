@@ -25,6 +25,11 @@ class SettingsStore(private val context: Context) {
     private val weightKey = stringPreferencesKey("weight_unit")
     private val lengthKey = stringPreferencesKey("length_unit")
     private val recipeSortKey = stringPreferencesKey("recipe_sort")
+    private val reportNotifyKey = androidx.datastore.preferences.core.booleanPreferencesKey("weekly_report_notify")
+
+    /** Sunday-morning weekly report notification (on by default). */
+    val weeklyReportNotify: Flow<Boolean> = context.dataStore.data.map { it[reportNotifyKey] ?: true }
+    suspend fun setWeeklyReportNotify(v: Boolean) = context.dataStore.edit { it[reportNotifyKey] = v }
 
     /** Remembered recipe sort, encoded as "KEY:asc|desc". */
     val recipeSort: Flow<String?> = context.dataStore.data.map { it[recipeSortKey] }

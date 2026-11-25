@@ -43,6 +43,7 @@ data class BackupFile(
     val customIngredients: List<com.forma.app.data.db.IngredientEntity> = emptyList(),
     val mealPlan: List<com.forma.app.data.db.MealPlanEntity> = emptyList(),
     val pantryAlways: List<com.forma.app.data.db.PantryItemEntity> = emptyList(),
+    val weeklyReports: List<com.forma.app.data.db.WeeklyReportEntity> = emptyList(),
 )
 
 class BackupManager(private val context: Context, private val db: FormaDatabase) {
@@ -65,6 +66,7 @@ class BackupManager(private val context: Context, private val db: FormaDatabase)
         customRecipes = db.recipes().all().filter { !it.builtIn },
         customIngredients = db.recipes().all().filter { !it.builtIn }.flatMap { db.recipes().ingredients(it.id) },
         mealPlan = db.mealPlan().all(),
+        weeklyReports = db.reports().all(),
     )
 
     fun encode(b: BackupFile): String = json.encodeToString(BackupFile.serializer(), b)
@@ -108,6 +110,7 @@ class BackupManager(private val context: Context, private val db: FormaDatabase)
         db.openHelper.writableDatabase.execSQL("DELETE FROM meal_plan")
         db.mealPlan().insertAll(b.mealPlan.map { it.copy(loggedFoodId = null) })
         b.pantryAlways.forEach { db.mealPlan().upsertPantry(it) }
+        b.weeklyReports.forEach { db.reports().upsert(it) }
         b.customRecipes.forEach { r -> db.recipes().replaceRecipe(r.copy(photoUri = null), b.customIngredients.filter { it.recipeId == r.id }) }
     }
 
