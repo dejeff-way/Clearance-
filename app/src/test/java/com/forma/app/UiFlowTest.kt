@@ -120,23 +120,6 @@ class UiFlowTest {
         waitFor { text("exname_MON_1") == "Goblet squat" }
     }
 
-    @Test fun `record carryover overage reduces tomorrow not today`() {
-        // Manual recording is only offered when automatic carryover is switched off
-        runBlocking { c.profile.update { it.copy(autoCarryover = false) } }
-        rule.onNodeWithTag("tab_settings").performClick()
-        waitFor { rule.onAllNodesWithTagExists("settings") }
-        rule.onNode(androidx.compose.ui.test.hasText("Calorie carryover", substring = false), useUnmergedTree = true).performScrollTo().performClick()
-        waitFor { rule.onAllNodesWithTagExists("record_overage") }
-        rule.onNodeWithTag("record_overage").performClick()
-        waitFor { rule.onAllNodesWithTagExists("co_amount") }
-        rule.onNodeWithText("Today").performClick()
-        rule.onNodeWithTag("co_amount").performTextInput("300")
-        rule.onNodeWithTag("co_save").performClick()
-        waitFor { runBlocking { c.db.carryover().all() }.size == 1 }
-        waitFor { text("carryover_status").contains("Projected to clear") }
-        assertTrue(text("carryover_status").contains("200 kcal a day"))
-    }
-
     @Test fun `health connect unavailable and permission denied states`() {
         rule.onNodeWithTag("tab_settings").performClick()
         waitFor { rule.onAllNodesWithTagExists("settings") }

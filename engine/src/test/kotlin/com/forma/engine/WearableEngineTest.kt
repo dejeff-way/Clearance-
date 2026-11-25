@@ -46,20 +46,20 @@ class WearableEngineTest {
 
     @Test fun `activity can raise the budget only up to the cap`() {
         val sedentary = BudgetCalculator.sedentaryBudget(p) // 2265×1.2 − 500 ≈ 2218
-        val big = BudgetCalculator.compute(p, 4200.0, 0)
+        val big = BudgetCalculator.compute(p, 4200.0)
         assertTrue(big.cappedByActivityLimit)
         assertEquals(sedentary + 500, big.finalBudget)
         assertTrue(big.warnings.any { it.contains("limits the increase") })
-        val modest = BudgetCalculator.compute(p, 2900.0, 0)
+        val modest = BudgetCalculator.compute(p, 2900.0)
         assertFalse(modest.cappedByActivityLimit); assertEquals(2400, modest.finalBudget)
-        val uncapped = BudgetCalculator.compute(p.copy(maxActivityBudgetIncreaseKcal = null), 4200.0, 0)
+        val uncapped = BudgetCalculator.compute(p.copy(maxActivityBudgetIncreaseKcal = null), 4200.0)
         assertEquals(3700, uncapped.finalBudget)
         // The cap never lowers a budget below the minimum
-        assertEquals(2000, BudgetCalculator.compute(p, 2100.0, 0).finalBudget)
+        assertEquals(2000, BudgetCalculator.compute(p, 2100.0).finalBudget)
     }
 
     @Test fun `actual deficit uses full expenditure even when the budget is capped`() {
-        val s = DaySummary.compute(p, DayEnergyInputs(day, 1.0, hcTotalKcal = 4200.0), Macros(2500.0, 180.0), 0)
+        val s = DaySummary.compute(p, DayEnergyInputs(day, 1.0, hcTotalKcal = 4200.0), Macros(2500.0, 180.0))
         assertEquals(1700, s.actualDeficitSoFar)
         assertTrue(s.budget.cappedByActivityLimit)
         assertTrue(s.onTrack)

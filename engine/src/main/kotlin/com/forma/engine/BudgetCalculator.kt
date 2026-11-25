@@ -3,13 +3,11 @@ package com.forma.engine
 import kotlin.math.roundToInt
 
 data class BudgetResult(
-    /** Budget before the minimum safeguard and before carryover. */
+    /** Budget before the minimum safeguard. */
     val rawBudget: Int,
-    /** Budget after the minimum safeguard, before carryover repayment. */
+    /** Budget after the minimum safeguard. */
     val baseBudget: Int,
     val heldAtMinimum: Boolean,
-    val repaymentScheduled: Int,
-    val repaymentApplied: Int,
     /** What the user can eat today. */
     val finalBudget: Int,
     /** The deficit the user asked for. */
@@ -28,7 +26,7 @@ object BudgetCalculator {
     const val LARGE_DEFICIT_KCAL = 1000
     const val LARGE_DEFICIT_FRACTION = 0.25
 
-    /** Budget before carryover, after the minimum safeguard. Used by the carryover ledger. */
+    /** Budget after the minimum safeguard. */
     fun baseBudget(p: EnergyProfile, projectedExpenditure: Double): Int =
         maxOf(rawBudget(p, projectedExpenditure), p.minimumBudgetKcal)
 
@@ -46,7 +44,7 @@ object BudgetCalculator {
     /** Highest budget activity may produce in DYNAMIC mode, or null when uncapped. */
     fun activityCap(p: EnergyProfile): Int? = p.maxActivityBudgetIncreaseKcal?.takeIf { it > 0 }?.let { sedentaryBudget(p) + it }
 
-    fun compute(p: EnergyProfile, projectedExpenditure: Double, repaymentScheduled: Int): BudgetResult {
+    fun compute(p: EnergyProfile, projectedExpenditure: Double): BudgetResult {
         val warnings = mutableListOf<String>()
         val raw = rawBudget(p, projectedExpenditure)
         val uncapped = (projectedExpenditure - p.desiredDeficitKcal).roundToInt()
@@ -61,13 +59,7 @@ object BudgetCalculator {
             warnings += "The calculated budget ($raw kcal) is below your ${p.minimumBudgetKcal} kcal minimum, so " +
                 "FORMA is holding it at the minimum. Your real deficit today will be smaller than planned."
         }
-        val headroom = (base - p.minimumBudgetKcal).coerceAtLeast(0)
-        val applied = repaymentScheduled.coerceIn(0, headroom)
-        if (applied < repaymentScheduled) {
-            warnings += "Carryover repayment reduced from $repaymentScheduled to $applied kcal to stay at or above " +
-                "your minimum budget. The rest carries forward."
-        }
-        val final = base - applied
+        val final = base
         val deficitReq = when (p.budgetMode) {
             BudgetMode.DYNAMIC -> p.desiredDeficitKcal
             BudgetMode.FIXED -> (projectedExpenditure - (p.fixedBudgetKcal ?: base)).roundToInt()
@@ -83,8 +75,6 @@ object BudgetCalculator {
             rawBudget = raw,
             baseBudget = base,
             heldAtMinimum = held,
-            repaymentScheduled = repaymentScheduled,
-            repaymentApplied = applied,
             finalBudget = final,
             plannedDeficit = deficitReq,
             impliedDeficit = (projectedExpenditure - final).roundToInt(),
@@ -120,9 +110,9 @@ data class DaySummary(
     val overBudgetKcal: Int get() = (-remainingKcal).coerceAtLeast(0)
 
     companion object {
-        fun compute(p: EnergyProfile, input: DayEnergyInputs, consumed: Macros, repaymentScheduled: Int): DaySummary {
+        fun compute(p: EnergyProfile, input: DayEnergyInputs, consumed: Macros): DaySummary {
             val exp = ExpenditureEstimator.estimate(p, input)
-            val budget = BudgetCalculator.compute(p, exp.projectedDayKcal, repaymentScheduled)
+            val budget = BudgetCalculator.compute(p, exp.projectedDayKcal)
             return DaySummary(exp, budget, consumed, p.proteinTargetG)
         }
     }

@@ -77,7 +77,7 @@ open class ScreenshotTest {
         Thread.sleep(300); rule.waitForIdle(); shot("07_energy_breakdown")
     }
 
-    @Test fun carryoverAndLog() {
+    @Test fun addFood() {
         load()
         rule.activity.runOnUiThread { }
         rule.onNodeWithTagScrolled("add_food")

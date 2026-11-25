@@ -1,6 +1,5 @@
 package com.forma.app.data.repo
 
-import com.forma.app.data.db.CarryoverEntity
 import com.forma.app.data.db.ExerciseSessionEntity
 import com.forma.app.data.db.FoodLogEntity
 import com.forma.app.data.db.FormaDatabase
@@ -202,20 +201,6 @@ class BodyRepository(
 
     suspend fun updateMeasurement(m: MeasurementEntity) = db.body().updateMeasurement(m)
     suspend fun deleteMeasurement(id: Long) = db.body().deleteMeasurement(id)
-}
-
-class CarryoverRepository(private val db: FormaDatabase, private val time: TimeProvider) {
-    val entries = db.carryover().observeAll()
-
-    suspend fun add(kcal: Int, kind: String, epochDay: Long, note: String?): Long {
-        require(kcal in 1..5000) { "Enter between 1 and 5,000 kcal" }
-        return db.carryover().insert(CarryoverEntity(epochDay = epochDay, kcal = kcal, kind = kind, note = note))
-    }
-
-    suspend fun update(e: CarryoverEntity) = db.carryover().update(e.copy(updatedAt = time.nowMillis()))
-    suspend fun cancel(e: CarryoverEntity, cancelled: Boolean = true) =
-        db.carryover().update(e.copy(cancelled = cancelled, updatedAt = time.nowMillis()))
-    suspend fun delete(id: Long) = db.carryover().delete(id)
 }
 
 class ActivityRepository(private val db: FormaDatabase) {

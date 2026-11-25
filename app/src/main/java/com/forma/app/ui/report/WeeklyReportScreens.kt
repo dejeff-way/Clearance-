@@ -114,7 +114,7 @@ fun WeeklyReportCard(nav: NavController) {
             StatBlock("Steps / day", r.stepsAvg?.let { Fmt.int(it) } ?: "—", null, Modifier.weight(1f))
         }
         Spacer(Modifier.height(Space.m))
-        Text("${r.workoutsDone} of ${r.workoutsPlanned} workouts · ≈ ${Fmt.one(r.fatLb)} lb of fat · tap for the full report",
+        Text("${r.workoutsDone} of ${r.workoutsPlanned} workouts · tap for the full report",
             style = Forma.type.caption, color = c.textSecondary, modifier = Modifier.padding(end = Space.m))
     }
 }
@@ -203,11 +203,11 @@ fun WeeklyReportScreen(nav: NavController, weekStart: Long) {
             FormaCard(Modifier.testTag("report_deficit")) {
                 Row {
                     StatBlock("Weekly deficit", Fmt.kcal(r.deficitTotal), "kcal", Modifier.weight(1f), valueColor = if (r.deficitTotal >= 0) c.accent else c.warn)
-                    StatBlock("Fat equivalent", "≈ ${Fmt.one(r.fatLb)}", "lb", Modifier.weight(1f))
+                    StatBlock("Per day", r.deficitAvg?.let(Fmt::kcal) ?: "—", "kcal", Modifier.weight(1f))
                 }
                 Delta(prev?.takeIf { it.daysLogged > 0 && r.daysLogged > 0 }?.let { (r.deficitTotal - it.deficitTotal).toDouble() }, goodWhenUp = true, { Fmt.kcal(it) + " kcal" })
                 Spacer(Modifier.height(Space.s))
-                Text("Counted on days with food logged (avg ${r.deficitAvg?.let(Fmt::kcal) ?: "—"} kcal/day). 3,500 kcal ≈ 1 lb.",
+                Text("Estimated burn minus food, on days with food logged. Your weight trend shows what it adds up to.",
                     style = Forma.type.caption, color = c.textTertiary)
                 r.weightAvg?.let { w ->
                     Hairline(Modifier.padding(vertical = Space.s))
@@ -220,7 +220,11 @@ fun WeeklyReportScreen(nav: NavController, weekStart: Long) {
             // ── Sleep ────────────────────────────────────────
             SectionHeader("Sleep")
             FormaCard(Modifier.testTag("report_sleep")) {
-                if (r.sleepNights == 0) Text("No sleep recorded this week. Wear your watch to bed and allow Sleep in Health Connect.",
+                if (r.sleepNights > 0 && r.sleepScore == null) {
+                    StatBlock("Avg asleep", r.sleepAvgMin?.let(::hm) ?: "—", null)
+                    Text("${r.sleepNights} night${if (r.sleepNights == 1) "" else "s"} recorded without sleep stages, so there's no score — only hours.",
+                        style = Forma.type.caption, color = c.textSecondary)
+                } else if (r.sleepNights == 0) Text("No sleep recorded this week. Wear your watch to bed and allow Sleep in Health Connect.",
                     style = Forma.type.bodySmall, color = c.textSecondary)
                 else {
                     Row(verticalAlignment = Alignment.Bottom) {
@@ -239,8 +243,8 @@ fun WeeklyReportScreen(nav: NavController, weekStart: Long) {
                     r.bestNightDay?.let { ValueRow("Best night", "${r.bestNightScore}", Fmt.dow(LocalDate.ofEpochDay(it)) + " morning", valueColor = c.accent) }
                     r.worstNightDay?.let { ValueRow("Toughest night", "${r.worstNightScore}", Fmt.dow(LocalDate.ofEpochDay(it)) + " morning", valueColor = c.warn) }
                     Text(
-                        "FORMA's score: duration up to 50 (7 h+ is full marks), deep + REM sleep up to 25, little time awake up to 25." +
-                            if (!r.sleepFromStages) " No sleep stages were recorded, so only duration is scored." else "",
+                        "FORMA's score: duration up to 50 (full at 7 h+, the adult recommendation), deep ≥ 13 % and REM ≥ 20 % of sleep up to 25, " +
+                            "sleep efficiency ≥ 85 % up to 25. Nights without sleep stages aren't scored.",
                         style = Forma.type.caption, color = c.textTertiary,
                     )
                 }

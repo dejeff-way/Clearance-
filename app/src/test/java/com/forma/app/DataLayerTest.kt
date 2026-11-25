@@ -11,7 +11,6 @@ import com.forma.app.data.seed.RecipeSeed
 import com.forma.app.data.seed.WorkoutProgram
 import com.forma.app.data.seed.ExerciseLibrary
 import com.forma.app.di.AppContainer
-import com.forma.engine.CarryoverKind
 import com.forma.engine.Portion
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -178,37 +177,13 @@ class DataLayerTest {
         assertTrue(measured.expenditure.lines.any { it.label.startsWith("FORMA") && it.kind == com.forma.engine.LineKind.EXCLUDED })
     }
 
-    // ── Carryover ───────────────────────────────────────────
-    @Test fun `overage recorded yesterday reduces today's budget by up to 200`() = runBlocking {
+    // ── Going over budget ──────────────────────────────────
+    @Test fun `going over yesterday doesn't change today's budget`() = runBlocking {
         val normal = model().today.budget.finalBudget
-        c.carryover.add(300, CarryoverKind.OVERAGE.name, today.minusDays(1).toEpochDay(), null)
-        val m = model { it.s.carryover.isNotEmpty() }
-        assertEquals(200, m.today.budget.repaymentApplied)
-        assertEquals(normal - 200, m.today.budget.finalBudget)
-        assertEquals(100, m.carryover.balanceAfterToday)
-        assertEquals(today.plusDays(1), m.carryover.projectedClearDate)
-        // Carryover never changes intake or actual deficit
-        assertEquals(0.0, m.today.consumed.kcal, 0.0)
-        assertEquals(m.summary(today.minusDays(1)).actualDeficitSoFar, model().summary(today.minusDays(1)).actualDeficitSoFar)
-    }
-
-    @Test fun `cancelling and editing an overage recalculates`() = runBlocking {
-        val id = c.carryover.add(300, CarryoverKind.OVERAGE.name, today.minusDays(1).toEpochDay(), null)
-        model { it.s.carryover.isNotEmpty() }
-        val e = c.db.carryover().all().single { it.id == id }
-        c.carryover.update(e.copy(kcal = 150))
-        assertEquals(150, model { it.s.carryover.firstOrNull()?.kcal == 150 }.today.budget.repaymentApplied)
-        c.carryover.cancel(e.copy(kcal = 150))
-        assertEquals(0, model { it.s.carryover.firstOrNull()?.cancelled == true }.today.budget.repaymentApplied)
-    }
-
-    @Test fun `repayment never pushes the budget below the minimum`() = runBlocking {
-        c.profile.update { it.copy(minimumBudgetKcal = 2150) } // estimated base ≈ 2218 → 68 headroom
-        c.carryover.add(300, CarryoverKind.OVERAGE.name, today.minusDays(1).toEpochDay(), null)
-        val m = model { it.s.carryover.isNotEmpty() && it.s.profile.minimumBudgetKcal == 2150 }
-        assertEquals(2150, m.today.budget.finalBudget)
-        assertTrue(m.today.budget.repaymentApplied < 200)
-        assertTrue(m.today.budget.warnings.any { it.contains("carries forward") })
+        c.food.logManual("Big dinner", Category.SUPPER.name, 4500.0, 60.0, null, null, today.minusDays(1).toEpochDay(), TestEnv.time.nowMillis() - 18 * 3_600_000)
+        val m = model { it.hasFood(today.minusDays(1)) }
+        assertEquals(normal, m.today.budget.finalBudget)
+        assertTrue(m.summary(today.minusDays(1)).projectedDeficit < 0)   // the surplus shows in that day's actual deficit
     }
 
     // ── Weight ─────────────────────────────────────────────
@@ -268,7 +243,6 @@ class DataLayerTest {
         c1.initialize()
         c1.food.logManual("Persisted", Category.LUNCH.name, 500.0, 40.0, null, null, today.toEpochDay(), TestEnv.time.nowMillis())
         c1.body.logWeight(258.4)
-        c1.carryover.add(250, CarryoverKind.OVERAGE.name, today.toEpochDay(), "test")
         c1.recipes.setFavorite("tuna_poke_bowl", true)
         c1.db.close()
 
@@ -276,7 +250,6 @@ class DataLayerTest {
         assertEquals("Persisted", db2.food().all().single().name)
         assertEquals(258.4, db2.body().allWeights().single().weightLb, 0.0)
         assertEquals(258.4, db2.profile().get()!!.currentWeightLb, 0.0)
-        assertEquals(250, db2.carryover().all().single().kcal)
         assertTrue(db2.recipes().get("tuna_poke_bowl")!!.isFavorite)
         db2.close()
         ctx.deleteDatabase("forma.db")

@@ -24,8 +24,6 @@ data class WeekStats(
     val kcalAvg: Int?,
     val deficitTotal: Int,
     val deficitAvg: Int?,
-    /** 3,500 kcal ≈ 1 lb of fat. */
-    val fatLb: Double,
     val stepsTotal: Long,
     val stepsAvg: Long?,
     val stepDays: Int,
@@ -50,7 +48,7 @@ object WeeklyStats {
         val deficits = week.mapNotNull { it.deficit }
         val steps = week.filter { (it.steps ?: 0) > 0 }
         val nights = week.mapNotNull { d -> d.sleep?.takeIf { it.asleepMin > 0 }?.let { d.date to it } }
-        val scored = nights.map { (d, n) -> NightScore(d, SleepScore.score(n).score, n.asleepMin) }
+        val scored = nights.mapNotNull { (d, n) -> SleepScore.score(n)?.let { NightScore(d, it.score, n.asleepMin) } }
         fun avg(f: (SleepNight) -> Double?) = nights.mapNotNull { f(it.second) }.takeIf { it.isNotEmpty() }?.average()?.roundToInt()
         val deficitTotal = deficits.sum()
         return WeekStats(
@@ -60,7 +58,6 @@ object WeeklyStats {
             kcalAvg = food.takeIf { it.isNotEmpty() }?.map { it.kcal!! }?.average()?.roundToInt(),
             deficitTotal = deficitTotal,
             deficitAvg = deficits.takeIf { it.isNotEmpty() }?.average()?.roundToInt(),
-            fatLb = deficitTotal / 3500.0,
             stepsTotal = steps.sumOf { it.steps!! },
             stepsAvg = steps.takeIf { it.isNotEmpty() }?.let { s -> s.sumOf { it.steps!! } / s.size },
             stepDays = steps.size,

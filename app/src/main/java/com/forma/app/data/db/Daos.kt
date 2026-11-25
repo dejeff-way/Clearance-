@@ -82,15 +82,6 @@ interface SessionDao {
 }
 
 @Dao
-interface CarryoverDao {
-    @Query("SELECT * FROM carryover ORDER BY epochDay DESC, createdAt DESC") fun observeAll(): Flow<List<CarryoverEntity>>
-    @Insert suspend fun insert(e: CarryoverEntity): Long
-    @Update suspend fun update(e: CarryoverEntity)
-    @Query("DELETE FROM carryover WHERE id = :id") suspend fun delete(id: Long)
-    @Query("SELECT * FROM carryover") suspend fun all(): List<CarryoverEntity>
-}
-
-@Dao
 interface BodyDao {
     @Query("SELECT * FROM weights ORDER BY measuredAt") fun observeWeights(): Flow<List<WeightEntity>>
     @Query("SELECT * FROM weights WHERE source = 'HEALTH_CONNECT' AND epochDay BETWEEN :from AND :to")

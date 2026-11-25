@@ -369,6 +369,6 @@ private fun ManualEntry(meal: Category, onMeal: (Category) -> Unit, onAdd: (Stri
             if (k != null) onAdd(name.ifBlank { "Quick add" }, k, protein.toDoubleOrNull(), carbs.toDoubleOrNull(), fat.toDoubleOrNull())
         }, Modifier.fillMaxWidth().testTag("manual_add"), enabled = k != null && k >= 0)
         Spacer(Modifier.height(Space.m))
-        Note("Not sure of the exact number? A rough estimate is fine — anything over your budget carries over automatically.", Tone.NEUTRAL)
+        Note("Not sure of the exact number? A rough estimate is better than leaving it out.", Tone.NEUTRAL)
     }
 }

@@ -22,8 +22,8 @@ Requirements: JDK 17+ (built with 21), Android SDK platform 36 + build-tools 36.
 Real release signing: create `keystore.properties` in the project root (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`); it is git-ignored and used automatically.
 
 ## Structure
-- `engine/` — pure Kotlin calorie engine (no Android): Mifflin–St Jeor BMR, expenditure estimation with double-count protection, dynamic budget with minimum safeguard, carryover ledger, weight-trend analysis and recommendations, progression, ingredient-based portion scaling. Fully unit tested.
-- `app/data` — Room database (profile, food log, recipes + ingredients, daily energy, exercise sessions, carryover, weights, waist, workouts, sets, substitutions, sync metadata), repositories, seed recipes and workout program, JSON backup.
+- `engine/` — pure Kotlin calorie engine (no Android): Mifflin–St Jeor BMR, expenditure estimation with double-count protection, dynamic budget with minimum safeguard, weight-trend analysis and recommendations, progression, ingredient-based portion scaling. Fully unit tested.
+- `app/data` — Room database (profile, food log, recipes + ingredients, daily energy, exercise sessions, weights, waist, workouts, sets, substitutions, sync metadata), repositories, seed recipes and workout program, JSON backup.
 - `app/health` — Health Connect: `HealthDataSource` interface, `HealthConnectSource` (official SDK), `HealthSyncer` (idempotent sync), `SyncWorker` (optional hourly background sync).
 - `app/ui` — design system (`theme`, `components`) and screens.
 
@@ -34,7 +34,7 @@ collection and under **My recipes**, can be edited or deleted, and are included 
 ingredient that looks like dairy (or vice versa).
 
 ## Macro targets
-Protein is your fixed target. Fat defaults to 30% of the day's calorie budget (adjustable 20–40%, never below 50 g). Carbs fill whatever budget is left after protein and fat. Either carbs or fat can be fixed in grams instead. Because the targets follow the daily budget, they rise on active days and drop on carryover days.
+Protein is your fixed target. Fat defaults to 30% of the day's calorie budget (adjustable 20–40%, never below 50 g). Carbs fill whatever budget is left after protein and fat. Either carbs or fat can be fixed in grams instead. Because the targets follow the daily budget, they rise on active days.
 Home and the food log show each macro as "to go", "on target" (within ±10%) or "over", and warn when some entries have no carb or fat info. Protein, carbs and fat each have 7/30/90-day history.
 
 ## Meal plan & shopping list
@@ -94,10 +94,9 @@ Not every device shares every type. The **Data check** on the Health Connect scr
    - Otherwise BMR + Health Connect *Active calories*.
    - Otherwise an estimate: BMR × 1.2 + the **larger** of (steps beyond 5,000) and (net exercise-session energy). Manual sessions marked "not recorded by a device" are the only thing added to measured totals.
 2. **Budget** = expenditure − desired deficit (default 500), or a fixed target. Never below the minimum (default 2,000): it is held there with a warning.
-3. **Carryover (automatic)** — when a finished day's logged food is over its budget, the difference is carried forward on its own (nothing to record; today only counts once it ends). Overages are repaid from the next day, max 200 kcal/day, never pushing a budget below the minimum; the rest carries forward. Carryover only changes budgets — never intake or the actual deficit.
-4. **Actual estimated deficit** = burned − consumed, shown separately from planned deficit and remaining budget.
-5. **Trend** — rolling 7-day average; after 14 days of weigh-ins an optional ≤200 kcal recommendation appears. Nothing changes automatically.
-6. **Weekly report** — every Sunday at 6 am (notification + Home card until dismissed): calories, deficit (≈ lb of fat), average weight, steps, a 0–100 sleep score from duration and sleep stages, workouts, and — after 4 weeks of workouts — personal records by estimated strength (`weight × (1 + reps/30)`). Every week is saved under Progress → Weekly reports and included in backups.
+3. **Actual estimated deficit** = burned − consumed, shown separately from planned deficit and remaining budget.
+4. **Trend** — rolling 7-day average; after 14 days of weigh-ins an optional ≤200 kcal recommendation appears. Nothing changes automatically.
+5. **Weekly report** — every Sunday at 6 am (notification + Home card until dismissed): calories, deficit, average weight, steps, a 0–100 sleep score (below), workouts, and — after 4 weeks of workouts — personal records by estimated strength (`weight × (1 + reps/30)`). Every week is saved under Progress → Weekly reports and included in backups.
 
 Every figure is labelled as an estimate; tap the dashboard summary to see the full calculation.
 
@@ -115,18 +114,29 @@ All read-only; FORMA never writes to Health Connect.
 
 History beyond 30 days is not requested (`READ_HEALTH_DATA_HISTORY` is not used). The manifest also includes the privacy-rationale activity Health Connect requires. WorkManager adds its standard `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE` and `ACCESS_NETWORK_STATE` declarations; FORMA makes no network requests.
 
-## Tested (211 automated tests, all passing)
-- **Engine (43):** BMR ≈ 2,265 for the default profile; HC-total, HC-active and estimate modes; partial-day projection; rejecting incomplete totals; steps vs sessions (no double count); overlap de-duplication; budget minimum and warnings; fixed mode; remaining vs deficit; carryover 300 → 200 + 100, minimum-limited repayment, multiple overages, edit/cancel; trend smoothing, 14-day recommendation logic; progression; ingredient scaling.
-- **Data layer (20, Robolectric + Room):** 17 recipes in 4 collections, no desserts, Creami under Snacks; no dairy in meat recipes; raw-fish warnings; portion scaling; milk choice changes nutrition; favourites survive re-seed; log/edit portion/delete updates the summary; calories-only manual entry; workouts raise estimated (not measured) expenditure; carryover affects budget only; weight → BMR; set logging, completion, remembered substitutions; substitutions stay in the same movement pattern; **persistence after closing and reopening the database file**; backup round-trip.
+## What the numbers are based on
+Everything FORMA calculates is either a measurement, a published equation or norm, or clearly a setting you choose:
+- **BMR:** Mifflin–St Jeor (1990). **Activity:** standard activity factors and MET values from the Compendium of Physical Activities.
+- **Wearable trim (optional, off by default):** wrist devices often misestimate energy expenditure (Shcherbina et al., 2017).
+- **Deficit warnings:** losing more than ~1 % of body weight a week makes it harder to keep muscle (Helms et al., 2014).
+- **Fat target:** 20–40 % of calories, within the Acceptable Macronutrient Distribution Range (20–35 %).
+- **Weight trend:** 7-day averages and a 14–28-day slope; early fast loss is flagged as mostly water and glycogen.
+- **Sleep score:** ≥ 7 h (AASM / Sleep Research Society, 2015); deep ≥ 13 % and REM ≥ 20 % (Ohayon et al., 2004); sleep efficiency ≥ 85 % (clinical norm). The 50/25/25 weighting is a convention, as with wearables' scores.
+- **PRs:** Epley estimated one-rep max (1985).
+- **Removed in 1.10** because they weren't supported by evidence: calorie carryover (paying back an over-budget day over the next days), and the weekly "≈ X lb of fat" figure (3,500 kcal = 1 lb doesn't hold for predicting fat loss; Hall, 2008; Thomas et al., 2013).
+
+## Tested (190 automated tests, all passing)
+- **Engine (43):** BMR ≈ 2,265 for the default profile; HC-total, HC-active and estimate modes; partial-day projection; rejecting incomplete totals; steps vs sessions (no double count); overlap de-duplication; budget minimum and warnings; fixed mode; remaining vs deficit; trend smoothing, 14-day recommendation logic; progression; ingredient scaling.
+- **Data layer (20, Robolectric + Room):** 17 recipes in 4 collections, no desserts, Creami under Snacks; no dairy in meat recipes; raw-fish warnings; portion scaling; milk choice changes nutrition; favourites survive re-seed; log/edit portion/delete updates the summary; calories-only manual entry; workouts raise estimated (not measured) expenditure; going over budget never changes the next day; weight → BMR; set logging, completion, remembered substitutions; substitutions stay in the same movement pattern; **persistence after closing and reopening the database file**; backup round-trip.
 - **Health Connect sync (9, fake data source):** import; re-sync creates no duplicates; deletions propagate; manual weights untouched; only granted types stored; permission-denied, unavailable and revoked-mid-read states; synced total drives the budget.
-- **UI flows (9, real Compose screens):** all five tabs; manual food entry updates "remaining" immediately; recipe Large portion → log → correct kcal; delete from food log; log weight; start workout, check off, substitute; record carryover; HC unavailable / not-granted / partially-granted screens; theme and targets persist.
+- **UI flows (9, real Compose screens):** all five tabs; manual food entry updates "remaining" immediately; recipe Large portion → log → correct kcal; delete from food log; log weight; start workout, check off, substitute; HC unavailable / not-granted / partially-granted screens; theme and targets persist.
 - **Custom recipes (4):** save/scale/edit/delete; total-per-serving mode; built-ins protected; survives re-seed and backup; create in the editor and log it; copy a built-in.
 - **Recipe import (20):** your example file; per-ingredient vs per-serving nutrition; servings; exact error paths; bad values; meat+dairy blocking (coconut milk allowed); category/kosher mapping; duplicate ids; kosher sourcing warnings; unknown fields kept; newer versions; code fences and plain arrays; plain-text recipes; inline fixes; approval-gated updates keeping favourites/photos; built-in protection; 21-recipe bulk import with report; embedded images; export → re-import round trip; **v1 → v2 database migration keeps existing data**; full UI flow.
 - **Workout import (12):** built-in program seeded and active; your example imports to the library only, with names matched to the library; multi-week program with week overrides, activation and cycling; exact validation paths; timed holds vs reps; approval-gated updates that keep logged history; built-in protection; scheduling copies the built-in program; deletion safeguards; export → re-import round trip; **v2 → v3 database migration**; end-to-end UI flows.
 - **Wearable integration (19):** every supported type imported, including sleep stages, per-workout heart rate/calories/distance and sources; unavailable metrics stay null; incremental change-token sync (narrow window, old-day uploads, expired tokens, permission changes); last-good-value retention vs deletions; updates without duplicates; no double-counting in the calorie engine; adjustment and budget cap; overlapping watch/FORMA workouts counted once; persistence across restarts; v3 → v4 migration; dashboard tiles before and after sync, live updates, history navigation and the data check.
-- **Automatic carryover (11):** a day 300 over → 200 tomorrow + 100 the day after with nothing recorded; today never counts until it ends; days before the feature started are ignored; repayment days that go over add their own overage; unlogged estimates go into the food log and aren't counted twice; switching it off; Home has no carryover or weight-trend card; v7 → v8 migration.
+- **Carryover removed (1):** v9 → v10 migration drops the old table and keeps all other data.
 - **Hold & rest timers (13):** hold lengths read from targets ("20–40 s", "45 s / side", "5 min"); per-side holds with a switch; long cardio stays in minutes; recommended rest (workout's value, else 90/60/45/30 s by exercise type); a plank hold counts down, logs the set and starts rest by itself; ±15 s and skip; stopping early saves the time actually held.
-- **Weekly report (19):** FORMA sleep score (duration 50 + deep/REM 25 + little time awake 25; duration-only when no stages); estimated-strength PRs (Epley), 4-week baseline, ties aren't PRs, new exercises have nothing to beat, holds and bodyweight reps; weekly totals count only days with data; report out Sunday 6 am; full report from seeded data; history back-filled and kept; Home card until dismissed; notification opens the report; backups include reports; v8 → v9 migration.
+- **Weekly report (19):** FORMA sleep score anchored to published norms (7 h, deep ≥ 13 %, REM ≥ 20 %, efficiency ≥ 85 %; no score without stage data); estimated-strength PRs (Epley), 4-week baseline, ties aren't PRs, new exercises have nothing to beat, holds and bodyweight reps; weekly totals count only days with data; report out Sunday 6 am; full report from seeded data; history back-filled and kept; Home card until dismissed; notification opens the report; backups include reports; v8 → v9 migration.
 - **Screenshots (40):** every main screen in light and dark — see `app/screenshots/`.
 
 ## Not done / limitations

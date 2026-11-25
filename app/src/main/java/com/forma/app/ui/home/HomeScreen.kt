@@ -126,15 +126,6 @@ fun HomeScreen(nav: NavController) {
                         style = Forma.type.caption, color = c.textSecondary)
                     Text("Planned deficit ${Fmt.kcal(sum.budget.plannedDeficit)} · " + if (sum.onTrack) "on track" else "over budget by ${Fmt.kcal(sum.overBudgetKcal)}",
                         style = Forma.type.caption, color = if (sum.onTrack) c.accent else c.negative, modifier = Modifier.testTag("on_track"))
-                    if (!sum.onTrack && s.model.autoCarryoverFrom != null) {
-                        Text("Anything over carries into the next days automatically (up to ${s.profile.maxRepaymentPerDay} kcal a day).",
-                            style = Forma.type.caption, color = c.textTertiary, modifier = Modifier.testTag("auto_carry_hint"))
-                    }
-                    if (sum.budget.repaymentApplied > 0) {
-                        Text("Includes −${sum.budget.repaymentApplied} kcal carried over from going over earlier" +
-                            (s.model.carryover.projectedClearDate?.takeIf { s.model.carryover.balanceAfterToday > 0 }?.let { " · clears ${Fmt.relativeDay(it, s.today).lowercase()}" } ?: ""),
-                            style = Forma.type.caption, color = c.warn, modifier = Modifier.testTag("carry_line"))
-                    }
                 }
                 Icon(Icons.Outlined.ChevronRight, "See calculation", tint = c.textTertiary, modifier = Modifier.size(18.dp))
             }

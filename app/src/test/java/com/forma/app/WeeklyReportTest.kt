@@ -189,7 +189,7 @@ class WeeklyReportTest {
         sql.version = 8; sql.close()
         val db = androidx.room.Room.databaseBuilder(ctx, FormaDatabase::class.java, "migrate9.db")
             .addMigrations(FormaDatabase.MIGRATION_1_2, FormaDatabase.MIGRATION_2_3, FormaDatabase.MIGRATION_3_4, FormaDatabase.MIGRATION_4_5,
-                FormaDatabase.MIGRATION_5_6, FormaDatabase.MIGRATION_6_7, FormaDatabase.MIGRATION_7_8, FormaDatabase.MIGRATION_8_9).build()
+                FormaDatabase.MIGRATION_5_6, FormaDatabase.MIGRATION_6_7, FormaDatabase.MIGRATION_7_8, FormaDatabase.MIGRATION_8_9, FormaDatabase.MIGRATION_9_10).build()
         runBlocking {
             assertEquals("Kept", db.food().all().single().name)
             assertTrue(db.reports().all().isEmpty())

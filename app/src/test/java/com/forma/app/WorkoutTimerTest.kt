@@ -105,7 +105,7 @@ class WorkoutTimerTest {
         sql.execSQL("INSERT INTO workout_sessions (id, epochDay, templateKey, title, startedAt, completedAt) VALUES (1, 20000, 'TUE', 'Cardio + Mobility', 0, ${323 * 60_000L})")
         sql.version = 4; sql.close()
         val db = androidx.room.Room.databaseBuilder(ctx, FormaDatabase::class.java, "migrate5.db")
-            .addMigrations(FormaDatabase.MIGRATION_1_2, FormaDatabase.MIGRATION_2_3, FormaDatabase.MIGRATION_3_4, FormaDatabase.MIGRATION_4_5, FormaDatabase.MIGRATION_5_6, FormaDatabase.MIGRATION_6_7, FormaDatabase.MIGRATION_7_8, FormaDatabase.MIGRATION_8_9).build()
+            .addMigrations(FormaDatabase.MIGRATION_1_2, FormaDatabase.MIGRATION_2_3, FormaDatabase.MIGRATION_3_4, FormaDatabase.MIGRATION_4_5, FormaDatabase.MIGRATION_5_6, FormaDatabase.MIGRATION_6_7, FormaDatabase.MIGRATION_7_8, FormaDatabase.MIGRATION_8_9, FormaDatabase.MIGRATION_9_10).build()
         runBlocking {
             val s = db.workouts().sessionById(1)!!
             assertEquals(0L, s.pausedMs); assertEquals(323.0, s.activeMinutes(s.completedAt!!)!!, 0.01)

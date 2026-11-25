@@ -29,6 +29,7 @@ data class ProfileEntity(
     val maintenanceActivityFactor: Double = 1.375,
     val desiredDeficitKcal: Int = 500,
     val minimumBudgetKcal: Int = 2000,
+    /** Unused since calorie carryover was removed (1.10). */
     val maxRepaymentPerDay: Int = 200,
     val budgetMode: String = "DYNAMIC",
     val fixedBudgetKcal: Int? = null,
@@ -47,9 +48,8 @@ data class ProfileEntity(
     val fatTargetG: Int? = null,
     /** Fixed carb target in grams; when null, carbs are the rest of the budget. */
     val carbTargetG: Int? = null,
-    // ── v8 (automatic carryover) ──
+    // ── v8 ── Unused since calorie carryover was removed (1.10); kept so existing databases still open.
     @ColumnInfo(defaultValue = "1") val autoCarryover: Boolean = true,
-    /** First day whose overage is detected automatically (set when the feature first runs, so old days don't count). */
     val autoCarryoverFromEpochDay: Long? = null,
     val updatedAt: Long = System.currentTimeMillis(),
 )
@@ -198,20 +198,6 @@ data class ExerciseSessionEntity(
     val maxHr: Double? = null,
     val distanceM: Double? = null,
     val dataOrigin: String? = null,
-)
-
-@Serializable
-@Entity(tableName = "carryover", indices = [Index("epochDay")])
-data class CarryoverEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val epochDay: Long,
-    val kcal: Int,
-    /** OVERAGE or UNLOGGED_ADJUSTMENT */
-    val kind: String,
-    val note: String? = null,
-    val cancelled: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis(),
 )
 
 @Serializable

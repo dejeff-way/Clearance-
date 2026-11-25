@@ -50,7 +50,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.forma.app.ui.carryover.CarryoverScreen
 import com.forma.app.ui.components.Hairline
 import com.forma.app.ui.food.AddFoodScreen
 import com.forma.app.ui.food.FoodLogScreen
@@ -81,7 +80,6 @@ object Routes {
     const val WORKOUT = "workout"
     const val PROGRESS = "progress"
     const val SETTINGS = "settings"
-    const val CARRYOVER = "carryover"
     const val HEALTH = "health"
     const val PROFILE = "profile_edit"
     const val TARGETS = "targets_edit"
@@ -153,7 +151,6 @@ fun FormaRoot(nav: NavHostController = rememberNavController()) {
                 composable("activity_add/{day}", listOf(navArgument("day") { type = NavType.LongType })) {
                     ActivityAddScreen(nav, it.arguments!!.getLong("day"))
                 }
-                composable(Routes.CARRYOVER) { CarryoverScreen(nav) }
                 composable(Routes.IMPORT) { RecipeImportScreen(nav) }
                 composable(Routes.MEAL_PLAN) { com.forma.app.ui.plan.MealPlanScreen(nav) }
                 composable("shopping/{week}", listOf(navArgument("week") { type = NavType.LongType })) {

@@ -129,9 +129,6 @@ fun SettingsScreen(nav: NavController) {
                     " · protein ${p.proteinTargetG} g · min ${Fmt.kcal(p.minimumBudgetKcal)}",
                 Icons.Outlined.Tune, { nav.navigate(Routes.TARGETS) }, trailing = { Chevron() })
             Hairline()
-            ListRow("Calorie carryover", (if (p.autoCarryover) "Automatic · " else "") + "up to ${p.maxRepaymentPerDay} kcal/day · balance ${Fmt.kcal(model?.carryover?.balanceAfterToday ?: 0)}",
-                Icons.Outlined.SwapVert, { nav.navigate(Routes.CARRYOVER) }, trailing = { Chevron() })
-            Hairline()
             ListRow("Health Connect", if (meta?.grantedPermissions.isNullOrBlank()) "Not connected" else "Connected" +
                 (meta?.lastSuccessAt?.let { " · synced ${Fmt.ago(it, System.currentTimeMillis())}" } ?: ""),
                 Icons.Outlined.Favorite, { nav.navigate(Routes.HEALTH) }, trailing = { Chevron() })
@@ -229,7 +226,7 @@ private fun ResetDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
         title = { Text("Reset all data?", style = Forma.type.heading, color = c.text) },
         text = {
             Column {
-                Text("This permanently deletes your food log, weights, measurements, workouts, carryover and settings. Recipes are kept. Type RESET to confirm.",
+                Text("This permanently deletes your food log, weights, measurements, workouts, weekly reports and settings. Recipes are kept. Type RESET to confirm.",
                     style = Forma.type.bodySmall, color = c.textSecondary)
                 Spacer(Modifier.height(Space.m))
                 FormaField(text, { text = it }, "Type RESET", modifier = Modifier.testTag("reset_input"))
@@ -359,8 +356,6 @@ fun TargetsEditScreen(nav: NavController) {
     var deficit by remember(p.id) { mutableStateOf(p.desiredDeficitKcal.toString()) }
     var protein by remember(p.id) { mutableStateOf(p.proteinTargetG.toString()) }
     var minimum by remember(p.id) { mutableStateOf(p.minimumBudgetKcal.toString()) }
-    var repay by remember(p.id) { mutableStateOf(p.maxRepaymentPerDay.toString()) }
-    var autoCarry by remember(p.id) { mutableStateOf(p.autoCarryover) }
     var baseline by remember(p.id) { mutableStateOf(p.baselineActivityFactor) }
     var maint by remember(p.id) { mutableStateOf(p.maintenanceActivityFactor) }
     var stepGoal by remember(p.id) { mutableStateOf(p.stepGoal.toString()) }
@@ -381,7 +376,7 @@ fun TargetsEditScreen(nav: NavController) {
             Spacer(Modifier.height(Space.s))
             Text(
                 if (mode == BudgetMode.DYNAMIC) "Budget = today's estimated expenditure − your deficit. It rises on active days."
-                else "Budget stays at a number you choose. Carryover and the minimum still apply.",
+                else "Budget stays at a number you choose. The minimum still applies.",
                 style = Forma.type.caption, color = c.textTertiary,
             )
             Spacer(Modifier.height(Space.m))
@@ -390,7 +385,7 @@ fun TargetsEditScreen(nav: NavController) {
                 Spacer(Modifier.height(Space.s))
             }
             FormaField(deficit, { deficit = it }, "Desired daily deficit", suffix = "kcal", numeric = true, decimal = false,
-                modifier = Modifier.testTag("deficit_input"), supporting = "≈500 kcal/day is a sustainable default (~1 lb/week).")
+                modifier = Modifier.testTag("deficit_input"), supporting = "500 kcal/day is a common moderate deficit. Progress checks use your actual weight trend.")
             if (dVal != null && dVal > 1000) Note("A deficit above 1,000 kcal/day is aggressive and makes it harder to keep muscle.", Tone.WARN)
             Spacer(Modifier.height(Space.s))
             FormaField(protein, { protein = it }, "Protein target", suffix = "g/day", numeric = true, decimal = false, modifier = Modifier.testTag("protein_input"))
@@ -410,10 +405,6 @@ fun TargetsEditScreen(nav: NavController) {
             SectionHeader("Safeguards")
             FormaField(minimum, { minimum = it }, "Minimum calorie budget", suffix = "kcal", numeric = true, decimal = false,
                 supporting = "FORMA warns and holds the budget here rather than going lower.", modifier = Modifier.testTag("minimum_input"))
-            Spacer(Modifier.height(Space.s))
-            FormaField(repay, { repay = it }, "Max carryover repayment", suffix = "kcal/day", numeric = true, decimal = false, modifier = Modifier.testTag("repay_input"))
-            com.forma.app.ui.components.SwitchRow("Automatic carryover", "When a day ends over budget, the extra is spread over the next days automatically.",
-                autoCarry, { autoCarry = it })
 
             SectionHeader("Activity")
             FormaField(stepGoal, { stepGoal = it }, "Daily step goal", suffix = "steps", numeric = true, decimal = false, modifier = Modifier.testTag("step_goal_input"))
@@ -455,7 +446,7 @@ fun TargetsEditScreen(nav: NavController) {
                     minimumBudgetKcal = minimum.toIntOrNull() ?: p.minimumBudgetKcal, budgetMode = mode.name,
                     fixedBudgetKcal = fixed.toIntOrNull()).toEnergyProfile(m.weightOn(m.s.today))
                 val exp = com.forma.engine.ExpenditureEstimator.estimate(preview, m.inputs(m.s.today))
-                val b = com.forma.engine.BudgetCalculator.compute(preview, exp.projectedDayKcal, m.carryover.scheduledToday)
+                val b = com.forma.engine.BudgetCalculator.compute(preview, exp.projectedDayKcal)
                 Spacer(Modifier.height(Space.l))
                 FormaCard {
                     Text("Preview for today", style = Forma.type.caption, color = c.textSecondary)
@@ -470,12 +461,11 @@ fun TargetsEditScreen(nav: NavController) {
             error?.let { Spacer(Modifier.height(Space.s)); Note(it, Tone.NEGATIVE) }
             Spacer(Modifier.height(Space.xl))
             PrimaryButton("Save targets", {
-                val d = deficit.toIntOrNull(); val pr = protein.toIntOrNull(); val mn = minimum.toIntOrNull(); val r = repay.toIntOrNull(); val fx = fixed.toIntOrNull()
+                val d = deficit.toIntOrNull(); val pr = protein.toIntOrNull(); val mn = minimum.toIntOrNull(); val fx = fixed.toIntOrNull()
                 when {
                     d == null || d !in 0..1500 -> error = "Deficit must be between 0 and 1,500 kcal"
                     pr == null || pr !in 40..400 -> error = "Protein must be between 40 and 400 g"
                     mn == null || mn !in 1200..5000 -> error = "Minimum budget must be between 1,200 and 5,000 kcal"
-                    r == null || r !in 0..500 -> error = "Repayment must be between 0 and 500 kcal/day"
                     stepGoal.toIntOrNull() == null || stepGoal.toInt() !in 1000..50000 -> error = "Step goal must be between 1,000 and 50,000"
                     fatFixed.isNotBlank() && fatFixed.toIntOrNull() !in 30..250 -> error = "Fixed fat must be between 30 and 250 g"
                     carbFixed.isNotBlank() && carbFixed.toIntOrNull() !in 20..600 -> error = "Fixed carbs must be between 20 and 600 g"
@@ -483,12 +473,10 @@ fun TargetsEditScreen(nav: NavController) {
                     else -> scope.launch {
                         container.profile.update {
                             it.copy(budgetMode = mode.name, fixedBudgetKcal = if (mode == BudgetMode.FIXED) fx else it.fixedBudgetKcal,
-                                desiredDeficitKcal = d, proteinTargetG = pr, minimumBudgetKcal = mn, maxRepaymentPerDay = r,
+                                desiredDeficitKcal = d, proteinTargetG = pr, minimumBudgetKcal = mn,
                                 baselineActivityFactor = baseline, maintenanceActivityFactor = maint,
                                 stepGoal = stepGoal.toInt(), wearableAdjustmentPct = adjPct, maxActivityBonusKcal = bonusCap,
-                                fatPctOfBudget = fatPct, fatTargetG = fatFixed.toIntOrNull(), carbTargetG = carbFixed.toIntOrNull(),
-                                autoCarryover = autoCarry,
-                                autoCarryoverFromEpochDay = if (autoCarry && !it.autoCarryover) container.time.today().toEpochDay() else it.autoCarryoverFromEpochDay)
+                                fatPctOfBudget = fatPct, fatTargetG = fatFixed.toIntOrNull(), carbTargetG = carbFixed.toIntOrNull())
                         }
                         nav.popOnMain()
                     }

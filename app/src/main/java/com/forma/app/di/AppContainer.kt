@@ -6,7 +6,6 @@ import com.forma.app.data.db.FormaDatabase
 import com.forma.app.data.prefs.SettingsStore
 import com.forma.app.data.repo.ActivityRepository
 import com.forma.app.data.repo.BodyRepository
-import com.forma.app.data.repo.CarryoverRepository
 import com.forma.app.data.repo.EnergyModel
 import com.forma.app.data.repo.EnergySnapshot
 import com.forma.app.data.repo.FoodRepository
@@ -47,7 +46,6 @@ class AppContainer(
     val recipes = RecipeRepository(db)
     val food = FoodRepository(db, recipes, time)
     val body = BodyRepository(db, profile, time)
-    val carryover = CarryoverRepository(db, time)
     val activity = ActivityRepository(db)
     val workouts = WorkoutRepository(db, time)
     val healthSyncer = HealthSyncer(db, healthSource, time)
@@ -78,11 +76,11 @@ class AppContainer(
     val energyModel: StateFlow<EnergyModel?> = combine(
         listOf(
             profile.profile, body.weights, db.energy().observeAll(), activity.sessions, workouts.sessions,
-            food.dailyTotals, carryover.entries, ticker, db.library().observeWorkouts(),
+            food.dailyTotals, ticker, db.library().observeWorkouts(),
         ),
     ) { arr ->
         @Suppress("UNCHECKED_CAST")
-        val tick = arr[7] as Pair<java.time.LocalDate, Double>
+        val tick = arr[6] as Pair<java.time.LocalDate, Double>
         @Suppress("UNCHECKED_CAST")
         EnergyModel(
             EnergySnapshot(
@@ -92,10 +90,9 @@ class AppContainer(
                 sessions = arr[3] as List<com.forma.app.data.db.ExerciseSessionEntity>,
                 workouts = arr[4] as List<com.forma.app.data.db.WorkoutSessionEntity>,
                 food = (arr[5] as List<com.forma.app.data.db.DailyFoodTotals>).associateBy { it.epochDay },
-                carryover = arr[6] as List<com.forma.app.data.db.CarryoverEntity>,
                 today = tick.first,
                 elapsedFractionToday = tick.second,
-                workoutDefs = (arr[8] as List<com.forma.app.data.db.WorkoutEntity>).associateBy { it.id },
+                workoutDefs = (arr[7] as List<com.forma.app.data.db.WorkoutEntity>).associateBy { it.id },
             ),
         )
     }.stateIn(appScope, SharingStarted.Eagerly, null)
@@ -111,8 +108,6 @@ class AppContainer(
 
     suspend fun initialize() {
         profile.ensure()
-        // Automatic carryover counts from the first day it's available, never retroactively.
-        if (profile.ensure().autoCarryoverFromEpochDay == null) profile.update { it.copy(autoCarryoverFromEpochDay = time.today().toEpochDay()) }
         recipes.seed()
         library.seed()
         runCatching { reports.refresh() }

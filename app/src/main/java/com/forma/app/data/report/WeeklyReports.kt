@@ -34,7 +34,6 @@ data class WeeklyReport(
     val budgetAvg: Int? = null,
     val deficitTotal: Int = 0,
     val deficitAvg: Int? = null,
-    val fatLb: Double = 0.0,
     // Weight (weekly average of weigh-ins)
     val weightAvg: Double? = null,
     val weightChange: Double? = null,
@@ -189,7 +188,7 @@ class WeeklyReportRepository(
         return WeeklyReport(
             weekStart = week.toEpochDay(), generatedAt = time.nowMillis(),
             daysLogged = st.daysLogged, kcalTotal = st.kcalTotal, kcalAvg = st.kcalAvg, budgetAvg = budgetAvg,
-            deficitTotal = st.deficitTotal, deficitAvg = st.deficitAvg, fatLb = st.fatLb,
+            deficitTotal = st.deficitTotal, deficitAvg = st.deficitAvg,
             weightAvg = wNow, weightChange = if (wNow != null && wBefore != null) wNow - wBefore else null,
             stepsTotal = st.stepsTotal, stepsAvg = st.stepsAvg, stepDays = st.stepDays,
             stepsBestDay = st.stepsBest?.first?.toEpochDay(), stepsBest = st.stepsBest?.second, stepGoal = p.stepGoal, stepGoalDays = st.stepGoalDays,

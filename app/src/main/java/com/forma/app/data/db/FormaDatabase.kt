@@ -9,14 +9,14 @@ import androidx.room.TypeConverters
 @Database(
     entities = [
         ProfileEntity::class, FoodLogEntity::class, RecipeEntity::class, IngredientEntity::class,
-        DailyEnergyEntity::class, ExerciseSessionEntity::class, CarryoverEntity::class, WeightEntity::class,
+        DailyEnergyEntity::class, ExerciseSessionEntity::class, WeightEntity::class,
         MeasurementEntity::class, WorkoutSessionEntity::class, ExerciseLogEntity::class, SetLogEntity::class,
         SubstitutionPrefEntity::class, SyncMetaEntity::class,
         ExerciseEntity::class, WorkoutEntity::class, WorkoutSlotEntity::class, ProgramEntity::class, ProgramDayEntity::class,
         ActiveProgramEntity::class, MealPlanEntity::class, ShoppingCheckEntity::class, PantryItemEntity::class,
         WeeklyReportEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -26,7 +26,6 @@ abstract class FormaDatabase : RoomDatabase() {
     abstract fun recipes(): RecipeDao
     abstract fun energy(): EnergyDao
     abstract fun sessions(): SessionDao
-    abstract fun carryover(): CarryoverDao
     abstract fun body(): BodyDao
     abstract fun workouts(): WorkoutDao
     abstract fun syncMeta(): SyncMetaDao
@@ -35,6 +34,12 @@ abstract class FormaDatabase : RoomDatabase() {
     abstract fun reports(): ReportDao
 
     companion object {
+        /** v9 → v10: calorie carryover removed. */
+        val MIGRATION_9_10 = object : androidx.room.migration.Migration(9, 10) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `carryover`")
+            }
+        }
         /** v8 → v9: saved weekly reports. */
         val MIGRATION_8_9 = object : androidx.room.migration.Migration(8, 9) {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
@@ -136,7 +141,7 @@ abstract class FormaDatabase : RoomDatabase() {
         fun create(context: Context, inMemory: Boolean = false): FormaDatabase {
             val b = if (inMemory) Room.inMemoryDatabaseBuilder(context, FormaDatabase::class.java)
             else Room.databaseBuilder(context, FormaDatabase::class.java, "forma.db")
-            return b.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build()
+            return b.addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10).build()
         }
     }
 }

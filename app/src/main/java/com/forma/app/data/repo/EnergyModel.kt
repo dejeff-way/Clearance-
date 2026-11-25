@@ -1,6 +1,5 @@
 package com.forma.app.data.repo
 
-import com.forma.app.data.db.CarryoverEntity
 import com.forma.app.data.db.DailyEnergyEntity
 import com.forma.app.data.db.DailyFoodTotals
 import com.forma.app.data.db.ExerciseSessionEntity
@@ -10,10 +9,6 @@ import com.forma.app.data.db.WorkoutSessionEntity
 import com.forma.engine.ActivitySession
 import com.forma.engine.BudgetCalculator
 import com.forma.engine.BudgetMode
-import com.forma.engine.CarryoverItem
-import com.forma.engine.CarryoverKind
-import com.forma.engine.CarryoverLedger
-import com.forma.engine.CarryoverState
 import com.forma.engine.DayEnergyInputs
 import com.forma.engine.DaySummary
 import com.forma.engine.EnergyProfile
@@ -32,7 +27,6 @@ data class EnergySnapshot(
     val sessions: List<ExerciseSessionEntity>,
     val workouts: List<WorkoutSessionEntity>,
     val food: Map<Long, DailyFoodTotals>,
-    val carryover: List<CarryoverEntity>,
     val today: LocalDate,
     val elapsedFractionToday: Double,
     val workoutDefs: Map<String, com.forma.app.data.db.WorkoutEntity> = emptyMap(),
@@ -40,13 +34,12 @@ data class EnergySnapshot(
 
 /**
  * Adapts stored rows into engine inputs. Every number shown in the app comes through here, so the dashboard,
- * history, carryover and progress screens always agree.
+ * history and progress screens always agree.
  */
 class EnergyModel(val s: EnergySnapshot) {
     private val sessionsByDay = s.sessions.groupBy { it.epochDay }
     private val workoutsByDay = s.workouts.filter { it.completedAt != null }.groupBy { it.epochDay }
     private val sortedWeights = s.weights.sortedBy { it.measuredAt }
-    private val baseCache = HashMap<Long, Int>()
 
     fun weightOn(day: LocalDate): Double {
         val d = day.toEpochDay()
@@ -85,37 +78,8 @@ class EnergyModel(val s: EnergySnapshot) {
 
     fun hasFood(day: LocalDate) = (s.food[day.toEpochDay()]?.items ?: 0) > 0
 
-    fun baseBudget(day: LocalDate): Int = baseCache.getOrPut(day.toEpochDay()) {
-        val p = profileFor(day)
-        BudgetCalculator.baseBudget(p, ExpenditureEstimator.estimate(p, inputs(day)).projectedDayKcal)
-    }
-
-    /** First day automatic carryover applies to, or null when it's turned off. */
-    val autoCarryoverFrom: LocalDate? get() =
-        if (s.profile.autoCarryover) s.profile.autoCarryoverFromEpochDay?.let(LocalDate::ofEpochDay) else null
-
-    val carryover: CarryoverState by lazy {
-        val autoFrom = autoCarryoverFrom
-        val items = s.carryover.filter { !it.cancelled }
-            // From the day automatic carryover starts, "ate more than I logged" estimates are already part of that
-            // day's logged food, so they must not also count as a separate carryover item.
-            .filterNot { autoFrom != null && it.epochDay >= autoFrom.toEpochDay() && it.kind != CarryoverKind.OVERAGE.name }
-            .map {
-                CarryoverItem(it.id, LocalDate.ofEpochDay(it.epochDay), it.kcal,
-                    if (it.kind == CarryoverKind.UNLOGGED_ADJUSTMENT.name) CarryoverKind.UNLOGGED_ADJUSTMENT else CarryoverKind.OVERAGE)
-            }
-        CarryoverLedger.compute(items, s.profile.maxRepaymentPerDay, s.profile.minimumBudgetKcal, s.today, ::baseBudget, autoFrom) { d, repaid ->
-            if (!hasFood(d)) null
-            else (consumed(d).kcal - (baseBudget(d) - repaid)).roundToInt().coerceAtLeast(0)
-        }
-    }
-
-    private fun scheduledRepayment(day: LocalDate): Int =
-        if (day == s.today) carryover.scheduledToday
-        else carryover.history.firstOrNull { it.date == day }?.scheduled ?: 0
-
     fun summary(day: LocalDate): DaySummary =
-        DaySummary.compute(profileFor(day), inputs(day), consumed(day), scheduledRepayment(day))
+        DaySummary.compute(profileFor(day), inputs(day), consumed(day))
 
     val today: DaySummary by lazy { summary(s.today) }
 
@@ -136,7 +100,6 @@ fun ProfileEntity.toEnergyProfile(weightLb: Double = currentWeightLb) = EnergyPr
     ageYears = ageYears, heightInches = heightInches, weightLb = weightLb,
     baselineActivityFactor = baselineActivityFactor, maintenanceActivityFactor = maintenanceActivityFactor,
     desiredDeficitKcal = desiredDeficitKcal, minimumBudgetKcal = minimumBudgetKcal,
-    maxCarryoverRepaymentPerDay = maxRepaymentPerDay,
     budgetMode = if (budgetMode == BudgetMode.FIXED.name) BudgetMode.FIXED else BudgetMode.DYNAMIC,
     fixedBudgetKcal = fixedBudgetKcal, proteinTargetG = proteinTargetG,
     wearableAdjustmentPct = wearableAdjustmentPct,

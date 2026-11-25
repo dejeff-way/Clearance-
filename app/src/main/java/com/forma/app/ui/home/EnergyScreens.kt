@@ -114,10 +114,6 @@ fun EnergyBreakdownScreen(nav: NavController, epochDay: Long) {
                 if (b.cappedByActivityLimit) ValueRow("Activity limit", "≤ ${Fmt.kcal((b.sedentaryBudget ?: 0) + (p.maxActivityBudgetIncreaseKcal ?: 0))}",
                     "Activity can raise the budget by at most ${p.maxActivityBudgetIncreaseKcal} kcal (Settings → Targets)", valueColor = c.warn)
                 if (b.heldAtMinimum) ValueRow("Held at minimum", Fmt.kcal(p.minimumBudgetKcal), "Raised from ${Fmt.kcal(b.rawBudget)}", valueColor = c.warn)
-                if (b.repaymentScheduled > 0) {
-                    ValueRow("Carryover repayment", "−${b.repaymentApplied}",
-                        if (b.repaymentApplied < b.repaymentScheduled) "Scheduled ${b.repaymentScheduled}, limited by your minimum budget" else "Max ${p.maxCarryoverRepaymentPerDay}/day", valueColor = c.warn)
-                }
                 Hairline()
                 ValueRow("Calorie budget", Fmt.kcal(b.finalBudget), valueColor = c.accent)
             }

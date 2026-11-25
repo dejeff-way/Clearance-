@@ -9,7 +9,7 @@ enum class BudgetMode {
     /** Budget = estimated expenditure for the day − desired deficit. Recalculates as activity data arrives. */
     DYNAMIC,
 
-    /** Budget = a fixed number chosen by the user (still subject to the minimum safeguard and carryover). */
+    /** Budget = a fixed number chosen by the user (still subject to the minimum safeguard). */
     FIXED,
 }
 
@@ -28,7 +28,6 @@ data class EnergyProfile(
     val maintenanceActivityFactor: Double = 1.375,
     val desiredDeficitKcal: Int = 500,
     val minimumBudgetKcal: Int = 2000,
-    val maxCarryoverRepaymentPerDay: Int = 200,
     val budgetMode: BudgetMode = BudgetMode.DYNAMIC,
     val fixedBudgetKcal: Int? = null,
     val proteinTargetG: Int = 180,

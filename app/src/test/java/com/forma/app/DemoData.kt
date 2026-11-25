@@ -4,7 +4,6 @@ import com.forma.app.data.db.DailyEnergyEntity
 import com.forma.app.data.seed.Category
 import com.forma.app.data.seed.WorkoutProgram
 import com.forma.app.di.AppContainer
-import com.forma.engine.CarryoverKind
 import com.forma.engine.Portion
 import java.time.LocalDate
 
@@ -34,7 +33,6 @@ object DemoData {
         c.food.logRecipe("protein_egg_scramble", Category.BREAKFAST.name, Portion.STANDARD, 1.0, today.toEpochDay(), t)
         c.food.logRecipe("chicken_fajita_bowl", Category.LUNCH.name, Portion.STANDARD, 1.0, today.toEpochDay(), t + 4 * 3_600_000)
         if (withHealth) c.db.energy().upsert(DailyEnergyEntity(today.toEpochDay(), hcTotalKcal = 1720.0, steps = 6420, sleepMinutes = 432.0))
-        c.carryover.add(300, CarryoverKind.OVERAGE.name, today.minusDays(3).toEpochDay(), "Kiddush")
         // Workouts this week and last
         for (d in 1..9) {
             val day = today.minusDays(d.toLong())

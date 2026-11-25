@@ -9,22 +9,26 @@ import java.time.LocalDate
 
 class SleepScoreTest {
     @Test fun `a full night with healthy stages scores near 100`() {
-        val r = SleepScore.score(SleepNight(450.0, deepMin = 80.0, lightMin = 250.0, remMin = 120.0, awakeMin = 20.0))
+        val r = SleepScore.score(SleepNight(450.0, deepMin = 80.0, lightMin = 250.0, remMin = 120.0, awakeMin = 20.0))!!
         assertEquals(50, r.duration); assertEquals(25, r.quality); assertEquals(25, r.restoration)
         assertEquals(100, r.score); assertEquals("Excellent", r.label)
     }
 
     @Test fun `short restless night scores low`() {
-        val r = SleepScore.score(SleepNight(300.0, deepMin = 20.0, lightMin = 240.0, remMin = 40.0, awakeMin = 80.0))
+        val r = SleepScore.score(SleepNight(300.0, deepMin = 20.0, lightMin = 240.0, remMin = 40.0, awakeMin = 80.0))!!
         assertEquals(25, r.duration)               // 5 h is halfway between 3 h and 7 h
-        assertEquals(14, r.quality)                // deep 6.7 % → 5.6 of 12.5, REM 13.3 % → 8.3 of 12.5
-        assertTrue(r.restoration < 10)
-        assertTrue(r.score < 60); assertEquals("Poor", r.label)
+        assertEquals(15, r.quality)                // deep 6.7 % of a 13 % norm → 6.4, REM 13.3 % of 20 % → 8.3
+        assertEquals(17, r.restoration)            // efficiency 300 / 380 = 79 % (norm 85 %)
+        assertEquals(57, r.score); assertEquals("Poor", r.label)
     }
 
-    @Test fun `no stage data uses duration with a neutral rest`() {
-        val r = SleepScore.score(SleepNight(420.0))
-        assertFalse(r.basedOnStages); assertEquals(75, r.score)
+    @Test fun `no stage data means no score rather than a guess`() {
+        assertNull(SleepScore.score(SleepNight(420.0)))
+    }
+
+    @Test fun `efficiency at the 85 percent clinical cut-off gets full restoration`() {
+        val r = SleepScore.score(SleepNight(425.0, 60.0, 280.0, 85.0, 75.0))!!   // 425 / 500 = 85 %
+        assertEquals(25, r.restoration); assertEquals(25, r.quality)
     }
 }
 
@@ -82,10 +86,12 @@ class WeeklyStatsTest {
         )
         val w = WeeklyStats.compute(sun, days, stepGoal = 10000)
         assertEquals(3, w.daysLogged); assertEquals(6300, w.kcalTotal); assertEquals(2100, w.kcalAvg)
-        assertEquals(1750, w.deficitTotal); assertEquals(0.5, w.fatLb, 0.001)
+        assertEquals(1750, w.deficitTotal)
         assertEquals(25500L, w.stepsTotal); assertEquals(8500L, w.stepsAvg); assertEquals(1, w.stepGoalDays)
         assertEquals(sun.plusDays(1) to 12500L, w.stepsBest)
-        assertEquals(2, w.sleepNights); assertEquals(sun, w.bestNight!!.date); assertEquals(sun.plusDays(1), w.worstNight!!.date)
+        assertEquals(2, w.sleepNights); assertEquals(sun, w.bestNight!!.date)
+        assertNull(w.worstNight)                     // the second night had no stages, so only one night was scored
+        assertEquals(100, w.sleepScoreAvg)
         assertEquals(405, w.sleepAvgMin)
     }
 
